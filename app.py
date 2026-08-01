@@ -28,7 +28,11 @@ st.caption(
 prices = get_prices()
 
 if prices is None:
-    st.error("Could not fetch current market prices.")
+    st.warning(
+        "Live prices are currently unavailable. "
+        "Historical analysis, backtesting, optimization, "
+        "and walk-forward testing can still use cached data."
+    )
 else:
     col1, col2, col3 = st.columns(3)
 
