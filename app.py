@@ -1,5 +1,7 @@
 import streamlit as st
 import plotly.express as px
+import pandas as pd
+
 from walk_forward import walk_forward_test
 
 from backtest import run_backtest
@@ -64,7 +66,11 @@ st.divider()
     ]
 )
 
-history = get_history("bitcoin", days=365)
+@st.cache_data(ttl=3600)
+def load_bitcoin_history() -> pd.DataFrame | None:
+    return get_history("bitcoin", days=365)
+
+history = load_bitcoin_history()
 
 if history is None:
     st.error("Could not fetch Bitcoin history.")

@@ -16,3 +16,6 @@ __pycache__/
 
 # Python caches
 .pytest_cache/
+
+# Downloaded market data
+data/*.csv
