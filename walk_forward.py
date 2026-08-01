@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
-import numpy as np
 import pandas as pd
 
+from engine.simulator import run_position_backtest
 from optimizer import optimize_ma_strategy
+from strategies.ma_crossover import generate_ma_positions
 
 
 @dataclass
@@ -76,7 +77,7 @@ def _get_value(row: pd.Series, possible_names: list[str]):
     )
 
 
-def _backtest_unseen_period(
+def _test_unseen_period(
     full_df: pd.DataFrame,
     split_index: int,
     fast_ma: int,
@@ -85,182 +86,48 @@ def _backtest_unseen_period(
     fee_rate: float,
 ) -> dict:
     """
-    Calculate indicators using earlier data for context, but begin the
-    simulated portfolio only at the start of the unseen test period.
-
-    Signals calculated on one row are executed on the following row.
+    Generate MA positions using the full history for indicator context,
+    then evaluate only the unseen test period.
     """
 
-    data = full_df.copy()
-    price_column = _find_price_column(data)
-
-    data[price_column] = pd.to_numeric(
-        data[price_column],
-        errors="coerce",
+    positions = generate_ma_positions(
+        df=full_df,
+        fast_window=fast_ma,
+        slow_window=slow_ma,
     )
 
-    data = data.dropna(subset=[price_column]).copy()
+    if positions.empty:
+        raise ValueError("No valid MA positions were generated.")
 
-    if split_index >= len(data):
-        raise ValueError("The split index is outside the dataframe.")
+    original_test_start_date = full_df.iloc[split_index]["date"]
 
-    data["fast_ma"] = data[price_column].rolling(fast_ma).mean()
-    data["slow_ma"] = data[price_column].rolling(slow_ma).mean()
-
-    # 1 means invested, 0 means cash.
-    data["raw_position"] = np.where(
-        data["fast_ma"] > data["slow_ma"],
-        1,
-        0,
-    )
-
-    # Avoid look-ahead bias:
-    # today's signal becomes tomorrow's position.
-    data["position"] = data["raw_position"].shift(1).fillna(0).astype(int)
-
-    test_data = data.iloc[split_index:].copy()
-
-    if test_data.empty:
-        raise ValueError("The testing period contains no rows.")
-
-    cash = float(initial_capital)
-    units = 0.0
-    previous_position = 0
-
-    equity_values: list[float] = []
-    trade_log: list[dict] = []
-
-    open_trade_cost: float | None = None
-    completed_trade_returns: list[float] = []
-
-    for index, row in test_data.iterrows():
-        price = float(row[price_column])
-        desired_position = int(row["position"])
-
-        # Enter the market.
-        if desired_position == 1 and previous_position == 0:
-            purchase_fee = cash * fee_rate
-            investable_cash = cash - purchase_fee
-
-            units = investable_cash / price
-            cash = 0.0
-            open_trade_cost = initial_capital if not equity_values else equity_values[-1]
-
-            trade_log.append(
-                {
-                    "date": index,
-                    "action": "BUY",
-                    "price": price,
-                    "fee": purchase_fee,
-                }
-            )
-
-        # Exit the market.
-        elif desired_position == 0 and previous_position == 1:
-            gross_sale_value = units * price
-            sale_fee = gross_sale_value * fee_rate
-            cash = gross_sale_value - sale_fee
-            units = 0.0
-
-            if open_trade_cost is not None and open_trade_cost > 0:
-                trade_return = (
-                    (cash / open_trade_cost) - 1
-                ) * 100
-
-                completed_trade_returns.append(trade_return)
-
-            trade_log.append(
-                {
-                    "date": index,
-                    "action": "SELL",
-                    "price": price,
-                    "fee": sale_fee,
-                }
-            )
-
-            open_trade_cost = None
-
-        portfolio_value = cash + units * price
-        equity_values.append(portfolio_value)
-        previous_position = desired_position
-
-    # Value any remaining position at the final market price.
-    final_price = float(test_data[price_column].iloc[-1])
-    final_value = cash + units * final_price
-
-    first_test_price = float(test_data[price_column].iloc[0])
-
-    buy_hold_purchase_fee = initial_capital * fee_rate
-    buy_hold_units = (
-        initial_capital - buy_hold_purchase_fee
-    ) / first_test_price
-
-    buy_hold_gross_value = buy_hold_units * final_price
-    buy_hold_sale_fee = buy_hold_gross_value * fee_rate
-    buy_hold_final_value = buy_hold_gross_value - buy_hold_sale_fee
-
-    strategy_return_pct = (
-        (final_value / initial_capital) - 1
-    ) * 100
-
-    buy_hold_return_pct = (
-        (buy_hold_final_value / initial_capital) - 1
-    ) * 100
-
-    equity_curve = test_data[
-        [price_column, "fast_ma", "slow_ma", "position"]
+    test_positions = positions.loc[
+        positions["date"] >= original_test_start_date
     ].copy()
 
-    equity_curve["strategy_value"] = equity_values
-
-    equity_curve["buy_hold_value"] = (
-        buy_hold_units * equity_curve[price_column]
-    )
-
-    equity_curve["running_peak"] = (
-        equity_curve["strategy_value"].cummax()
-    )
-
-    equity_curve["drawdown_pct"] = (
-        (
-            equity_curve["strategy_value"]
-            / equity_curve["running_peak"]
+    if test_positions.empty:
+        raise ValueError(
+            "The testing period contains no valid strategy rows."
         )
-        - 1
-    ) * 100
 
-    max_drawdown_pct = float(
-        equity_curve["drawdown_pct"].min()
-    )
-
-    completed_trades = len(completed_trade_returns)
-
-    winning_trades = sum(
-        trade_return > 0
-        for trade_return in completed_trade_returns
-    )
-
-    win_rate_pct = (
-        winning_trades / completed_trades * 100
-        if completed_trades > 0
-        else 0.0
+    simulation = run_position_backtest(
+        df=test_positions,
+        initial_capital=initial_capital,
+        fee_rate=fee_rate,
     )
 
     return {
-        "strategy_return_pct": strategy_return_pct,
-        "buy_hold_return_pct": buy_hold_return_pct,
-        "excess_return_pct": (
-            strategy_return_pct - buy_hold_return_pct
-        ),
-        "final_value": final_value,
-        "buy_hold_final_value": buy_hold_final_value,
-        "max_drawdown_pct": max_drawdown_pct,
-        "trades": completed_trades,
-        "win_rate_pct": win_rate_pct,
-        "equity_curve": equity_curve,
-        "trade_log": pd.DataFrame(trade_log),
+        "strategy_return_pct": simulation.strategy_return,
+        "buy_hold_return_pct": simulation.buy_hold_return,
+        "excess_return_pct": simulation.excess_return,
+        "final_value": simulation.final_value,
+        "buy_hold_final_value": simulation.buy_hold_final_value,
+        "max_drawdown_pct": simulation.max_drawdown,
+        "trades": simulation.completed_trades,
+        "win_rate_pct": simulation.win_rate,
+        "equity_curve": simulation.history,
+        "trade_log": simulation.trades,
     }
-
 
 def walk_forward_test(
     df: pd.DataFrame,
@@ -346,7 +213,7 @@ def walk_forward_test(
         )
     )
 
-    test_result = _backtest_unseen_period(
+    test_result = _test_unseen_period(
         full_df=data,
         split_index=split_index,
         fast_ma=fast_ma,
