@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 
@@ -9,6 +9,18 @@ from strategies.rsi import generate_rsi_positions
 
 
 StrategyGenerator = Callable[..., pd.DataFrame]
+ParameterType = Literal["int", "float"]
+
+
+@dataclass(frozen=True)
+class ParameterDefinition:
+    name: str
+    label: str
+    parameter_type: ParameterType
+    default: int | float
+    minimum: int | float
+    maximum: int | float
+    step: int | float
 
 
 @dataclass(frozen=True)
@@ -16,7 +28,14 @@ class StrategyDefinition:
     name: str
     generator: StrategyGenerator
     description: str
-    default_parameters: dict[str, Any]
+    parameters: tuple[ParameterDefinition, ...]
+
+    @property
+    def default_parameters(self) -> dict[str, Any]:
+        return {
+            parameter.name: parameter.default
+            for parameter in self.parameters
+        }
 
 
 STRATEGIES: dict[str, StrategyDefinition] = {
@@ -24,20 +43,60 @@ STRATEGIES: dict[str, StrategyDefinition] = {
         name="Moving Average",
         generator=generate_ma_positions,
         description="Classic moving-average crossover strategy.",
-        default_parameters={
-            "fast_window": 20,
-            "slow_window": 50,
-        },
+        parameters=(
+            ParameterDefinition(
+                name="fast_window",
+                label="Fast MA",
+                parameter_type="int",
+                default=20,
+                minimum=2,
+                maximum=100,
+                step=1,
+            ),
+            ParameterDefinition(
+                name="slow_window",
+                label="Slow MA",
+                parameter_type="int",
+                default=50,
+                minimum=3,
+                maximum=250,
+                step=1,
+            ),
+        ),
     ),
     "RSI": StrategyDefinition(
         name="RSI",
         generator=generate_rsi_positions,
         description="Relative Strength Index mean-reversion strategy.",
-        default_parameters={
-            "rsi_period": 14,
-            "oversold": 30.0,
-            "overbought": 70.0,
-        },
+        parameters=(
+            ParameterDefinition(
+                name="rsi_period",
+                label="RSI period",
+                parameter_type="int",
+                default=14,
+                minimum=2,
+                maximum=100,
+                step=1,
+            ),
+            ParameterDefinition(
+                name="oversold",
+                label="Oversold threshold",
+                parameter_type="float",
+                default=30.0,
+                minimum=1.0,
+                maximum=49.0,
+                step=1.0,
+            ),
+            ParameterDefinition(
+                name="overbought",
+                label="Overbought threshold",
+                parameter_type="float",
+                default=70.0,
+                minimum=51.0,
+                maximum=99.0,
+                step=1.0,
+            ),
+        ),
     ),
 }
 
