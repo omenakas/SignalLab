@@ -5,7 +5,7 @@ SignalLab is a modular quantitative research platform for researching, testing, 
 The project began as a cryptocurrency trading assistant and has evolved into a flexible research framework built around reusable strategies, a generic trading simulator, and a modular architecture.
 
 > **Disclaimer:** SignalLab is an educational and research project. It does **not** provide financial advice, and historical performance does not guarantee future results.
-PikkuApustaja@1989
+
 ---
 
 # ✨ Features
