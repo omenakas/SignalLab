@@ -9,7 +9,8 @@ from indicators import add_indicators
 from market import get_history, get_prices
 from optimizer import optimize_ma_strategy
 from strategy import analyze_market
-
+from engine.simulator import run_position_backtest
+from strategies.registry import STRATEGIES
 
 
 
@@ -61,12 +62,14 @@ st.divider()
     backtest_tab,
     strategy_lab_tab,
     walk_forward_tab,
+    comparison_tab,
 ) = st.tabs(
     [
         "Analysis",
         "Backtest",
         "Strategy Lab",
         "Walk-Forward",
+        "Strategy Comparison",
     ]
 )
 
@@ -804,3 +807,149 @@ with walk_forward_tab:
 
             except Exception as error:
                 st.exception(error)
+
+with comparison_tab:
+    st.subheader("Strategy Comparison")
+
+    st.write(
+        """
+        Compare every registered strategy using its default parameters.
+        All strategies use the same historical data, starting capital,
+        transaction fee, and generic simulator.
+        """
+    )
+
+    comparison_col1, comparison_col2 = st.columns(2)
+
+    with comparison_col1:
+        comparison_capital = st.number_input(
+            "Comparison initial capital (€)",
+            min_value=50.0,
+            max_value=100_000.0,
+            value=500.0,
+            step=50.0,
+            key="comparison_capital",
+        )
+
+    with comparison_col2:
+        comparison_fee = st.number_input(
+            "Comparison trading fee (%)",
+            min_value=0.0,
+            max_value=5.0,
+            value=0.1,
+            step=0.05,
+            key="comparison_fee",
+        )
+
+    if st.button(
+        "Compare strategies",
+        type="primary",
+        key="compare_strategies",
+    ):
+        comparison_results = []
+        equity_curves = {}
+
+        for strategy_name, strategy in STRATEGIES.items():
+            try:
+                positions = strategy.generator(
+                    df=history,
+                    **strategy.default_parameters,
+                )
+
+                result = run_position_backtest(
+                    df=positions,
+                    initial_capital=comparison_capital,
+                    fee_rate=comparison_fee / 100,
+                )
+
+                comparison_results.append(
+                    {
+                        "Strategy": strategy_name,
+                        "Final value (€)": result.final_value,
+                        "Return (%)": result.strategy_return,
+                        "Buy & hold (%)": result.buy_hold_return,
+                        "Excess return (pp)": result.excess_return,
+                        "Max drawdown (%)": result.max_drawdown,
+                        "Completed trades": result.completed_trades,
+                        "Win rate (%)": result.win_rate,
+                    }
+                )
+
+                curve = (
+                    result.history
+                    .set_index("date")["strategy_value"]
+                    .rename(strategy_name)
+                )
+
+                equity_curves[strategy_name] = curve
+
+            except ValueError as error:
+                st.warning(
+                    f"{strategy_name} could not be evaluated: {error}"
+                )
+
+        if not comparison_results:
+            st.error("No strategies could be evaluated.")
+
+        else:
+            results_df = pd.DataFrame(comparison_results)
+
+            results_df = results_df.sort_values(
+                by="Return (%)",
+                ascending=False,
+            ).reset_index(drop=True)
+
+            results_df.insert(
+                0,
+                "Rank",
+                range(1, len(results_df) + 1),
+            )
+
+            numeric_columns = [
+                "Final value (€)",
+                "Return (%)",
+                "Buy & hold (%)",
+                "Excess return (pp)",
+                "Max drawdown (%)",
+                "Win rate (%)",
+            ]
+
+            results_df[numeric_columns] = (
+                results_df[numeric_columns].round(2)
+            )
+
+            st.markdown("### Ranked results")
+
+            st.dataframe(
+                results_df,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            if equity_curves:
+                equity_df = pd.concat(
+                    equity_curves.values(),
+                    axis=1,
+                )
+
+                st.markdown("### Portfolio performance")
+                st.line_chart(equity_df)
+
+            st.markdown("### Strategy descriptions")
+
+            for strategy_name, strategy in STRATEGIES.items():
+                st.write(
+                    f"**{strategy_name}:** "
+                    f"{strategy.description}"
+                )
+
+                st.caption(
+                    f"Default parameters: "
+                    f"{strategy.default_parameters}"
+                )
+
+            st.warning(
+                "This comparison uses one historical period and each "
+                "strategy's default parameters. It does not establish "
+                "future profitability."
+            )
