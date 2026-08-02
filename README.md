@@ -1,5 +1,17 @@
 # 🧪 SignalLab
 
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+
+![Streamlit](https://img.shields.io/badge/Streamlit-App-red)
+
+![Version](https://img.shields.io/badge/version-0.6.0-orange)
+
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+
+## Screenshot
+
+![SignalLab Dashboard](assets/dashboard.png)
+
 SignalLab is a modular quantitative research platform for researching, testing, and comparing algorithmic trading strategies using historical market data.
 
 The project began as a cryptocurrency trading assistant and has evolved into a flexible research framework built around reusable strategies, a generic trading simulator, and a modular architecture.
