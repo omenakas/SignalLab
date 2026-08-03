@@ -7,6 +7,9 @@ import pandas as pd
 from strategies.ma_crossover import generate_ma_positions
 from strategies.rsi import generate_rsi_positions
 from strategies.macd import generate_macd_positions
+from strategies.bollinger_bands import (
+    generate_bollinger_positions,
+)
 
 
 StrategyGenerator = Callable[..., pd.DataFrame]
@@ -32,7 +35,7 @@ class ChartSeries:
     label: str
     column: str
     chart_type: Literal["line", "bar"] = "line"
-    
+
 @dataclass(frozen=True)
 class ChartPanel:
     title: str
@@ -220,6 +223,45 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 y_axis_title="MACD value",
             ),
         ),
+    ),
+    "Bollinger Bands": StrategyDefinition(
+        name="Bollinger Bands",
+        generator=generate_bollinger_positions,
+        description=(
+            "Mean-reversion strategy using upper and lower "
+            "Bollinger Bands."
+        ),
+        parameters=(
+            ParameterDefinition(
+                name="window",
+                label="Window",
+                parameter_type="int",
+                default=20,
+                minimum=5,
+                maximum=100,
+                step=1,
+                optimization_minimum=10,
+                optimization_maximum=40,
+                optimization_step=5,
+            ),
+            ParameterDefinition(
+                name="window_dev",
+                label="Standard deviations",
+                parameter_type="float",
+                default=2.0,
+                minimum=0.5,
+                maximum=4.0,
+                step=0.1,
+                optimization_minimum=1.5,
+                optimization_maximum=3.0,
+                optimization_step=0.5,
+            ),
+        ),
+        price_overlays={
+            "Upper band": "bb_upper",
+            "Middle band": "bb_middle",
+            "Lower band": "bb_lower",
+        },
     ),
 }
 
