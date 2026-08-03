@@ -6,6 +6,7 @@ import pandas as pd
 
 from strategies.ma_crossover import generate_ma_positions
 from strategies.rsi import generate_rsi_positions
+from strategies.macd import generate_macd_positions
 
 
 StrategyGenerator = Callable[..., pd.DataFrame]
@@ -114,6 +115,52 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 optimization_minimum=65.0,
                 optimization_maximum=75.0,
                 optimization_step=5.0,
+            ),
+        ),
+    ),
+    "MACD": StrategyDefinition(
+        name="MACD",
+        generator=generate_macd_positions,
+        description=(
+            "Trend-following strategy based on MACD "
+            "and signal-line crossovers."
+        ),
+        parameters=(
+            ParameterDefinition(
+                name="fast_period",
+                label="Fast period",
+                parameter_type="int",
+                default=12,
+                minimum=2,
+                maximum=50,
+                step=1,
+                optimization_minimum=8,
+                optimization_maximum=16,
+                optimization_step=2,
+            ),
+            ParameterDefinition(
+                name="slow_period",
+                label="Slow period",
+                parameter_type="int",
+                default=26,
+                minimum=3,
+                maximum=100,
+                step=1,
+                optimization_minimum=20,
+                optimization_maximum=40,
+                optimization_step=5,
+            ),
+            ParameterDefinition(
+                name="signal_period",
+                label="Signal period",
+                parameter_type="int",
+                default=9,
+                minimum=2,
+                maximum=30,
+                step=1,
+                optimization_minimum=5,
+                optimization_maximum=15,
+                optimization_step=2,
             ),
         ),
     ),
