@@ -13,6 +13,11 @@ from engine.simulator import run_position_backtest
 from strategies.registry import STRATEGIES, get_strategy
 from ui.parameter_builder import build_parameter_inputs
 
+from optimizer import optimize_strategy
+from ui.parameter_builder import (
+    build_optimization_grid_inputs,
+)
+
 
 
 st.set_page_config(
@@ -287,14 +292,28 @@ with backtest_tab:
     
 
 with strategy_lab_tab:
-    st.subheader("Moving-average Strategy Lab")
+    st.subheader("Strategy Lab")
 
     st.write(
         """
-        Test several fast and slow moving-average combinations.
-        Signals are executed on the following day, and the selected
-        transaction fee is charged on every purchase and sale.
+        Select a registered strategy and search across multiple
+        parameter combinations. Every combination is evaluated with
+        the same generic simulator.
         """
+    )
+
+    selected_optimizer_name = st.selectbox(
+        "Strategy to optimize",
+        options=list(STRATEGIES.keys()),
+        key="optimizer_strategy",
+    )
+
+    selected_optimizer_strategy = get_strategy(
+        selected_optimizer_name
+    )
+
+    st.caption(
+        selected_optimizer_strategy.description
     )
 
     settings1, settings2, settings3 = st.columns(3)
@@ -326,191 +345,194 @@ with strategy_lab_tab:
             max_value=100,
             value=1,
             step=1,
+            key="optimizer_minimum_trades",
         )
 
     st.markdown("#### Parameter ranges")
 
-    range1, range2 = st.columns(2)
-
-    with range1:
-        fast_range = st.slider(
-            "Fast moving-average range",
-            min_value=2,
-            max_value=100,
-            value=(5, 40),
-        )
-
-        fast_step = st.number_input(
-            "Fast MA step",
-            min_value=1,
-            max_value=20,
-            value=5,
-        )
-
-    with range2:
-        slow_range = st.slider(
-            "Slow moving-average range",
-            min_value=10,
-            max_value=250,
-            value=(30, 150),
-        )
-
-        slow_step = st.number_input(
-            "Slow MA step",
-            min_value=1,
-            max_value=30,
-            value=10,
-        )
-
-    fast_values = list(
-        range(
-            fast_range[0],
-            fast_range[1] + 1,
-            int(fast_step),
-        )
+    parameter_grid = build_optimization_grid_inputs(
+        strategy=selected_optimizer_strategy,
+        key_prefix="optimizer",
     )
 
-    slow_values = list(
-        range(
-            slow_range[0],
-            slow_range[1] + 1,
-            int(slow_step),
-        )
-    )
+    combinations = 1
 
-    combinations = sum(
-        1
-        for fast in fast_values
-        for slow in slow_values
-        if fast < slow
-    )
+    for values in parameter_grid.values():
+        combinations *= len(values)
 
     st.caption(
         f"This configuration will test "
-        f"{combinations} parameter combinations."
+        f"{combinations:,} parameter combinations."
     )
+
+    if combinations > 10_000:
+        st.warning(
+            "This is a large search and may take considerable time. "
+            "Consider increasing the parameter steps or narrowing "
+            "the ranges."
+        )
 
     run_optimizer = st.button(
         "Run optimizer",
         type="primary",
+        key="run_generic_optimizer",
     )
 
     if run_optimizer:
-        with st.spinner("Testing strategies..."):
-            optimizer_results = optimize_ma_strategy(
+        with st.spinner(
+            f"Optimizing {selected_optimizer_name}..."
+        ):
+            optimizer_results = optimize_strategy(
                 df=history,
-                fast_values=fast_values,
-                slow_values=slow_values,
+                strategy=selected_optimizer_strategy,
+                parameter_grid=parameter_grid,
                 initial_capital=optimizer_capital,
                 fee_rate=optimizer_fee / 100,
+                min_trades=int(minimum_trades),
             )
 
         if optimizer_results.empty:
             st.warning(
-                "No valid strategies were produced."
+                "No valid parameter combinations were produced. "
+                "Try lowering the minimum trade count or changing "
+                "the parameter ranges."
             )
 
         else:
-            filtered_results = optimizer_results[
-                optimizer_results["completed_trades"]
-                >= minimum_trades
-            ].copy()
+            best = optimizer_results.iloc[0]
 
-            if filtered_results.empty:
-                st.warning(
-                    "No strategies met the minimum-trades requirement."
+            st.markdown("### Best result")
+
+            best_parameters = {
+                parameter.label: best[parameter.name]
+                for parameter
+                in selected_optimizer_strategy.parameters
+                if parameter.name in best.index
+            }
+
+            formatted_parameters = " · ".join(
+                f"{label}: {value:g}"
+                if isinstance(value, float)
+                else f"{label}: {value}"
+                for label, value in best_parameters.items()
+            )
+
+            best1, best2, best3, best4 = st.columns(4)
+
+            best1.metric(
+                "Best parameters",
+                formatted_parameters,
+            )
+
+            best2.metric(
+                "Strategy return",
+                f"{best['strategy_return']:+.1f}%",
+            )
+
+            best3.metric(
+                "Excess vs hold",
+                f"{best['excess_return']:+.1f} pp",
+            )
+
+            best4.metric(
+                "Maximum drawdown",
+                f"{best['max_drawdown']:.1f}%",
+            )
+
+            st.markdown("### Ranked strategies")
+
+            display_results = optimizer_results.copy()
+
+            display_results.insert(
+                0,
+                "Rank",
+                range(
+                    1,
+                    len(display_results) + 1,
+                ),
+            )
+
+            rename_columns = {
+                parameter.name: parameter.label
+                for parameter
+                in selected_optimizer_strategy.parameters
+            }
+
+            rename_columns.update(
+                {
+                    "final_value": "Final value (€)",
+                    "strategy_return": "Return (%)",
+                    "buy_hold_return": "Buy & hold (%)",
+                    "excess_return": "Excess return (pp)",
+                    "max_drawdown": "Max drawdown (%)",
+                    "completed_trades": "Trades",
+                    "win_rate": "Win rate (%)",
+                }
+            )
+
+            display_results = display_results.rename(
+                columns=rename_columns
+            )
+
+            numeric_columns = [
+                "Final value (€)",
+                "Return (%)",
+                "Buy & hold (%)",
+                "Excess return (pp)",
+                "Max drawdown (%)",
+                "Win rate (%)",
+            ]
+
+            existing_numeric_columns = [
+                column
+                for column in numeric_columns
+                if column in display_results.columns
+            ]
+
+            display_results[existing_numeric_columns] = (
+                display_results[
+                    existing_numeric_columns
+                ].round(2)
+            )
+
+            st.dataframe(
+                display_results,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            parameter_names = [
+                parameter.name
+                for parameter
+                in selected_optimizer_strategy.parameters
+            ]
+
+            # A two-dimensional strategy can be displayed naturally
+            # as a heatmap. Strategies with three or more parameters
+            # remain available in the ranked-results table.
+            if len(parameter_names) == 2:
+                first_parameter = parameter_names[0]
+                second_parameter = parameter_names[1]
+
+                first_label = (
+                    selected_optimizer_strategy
+                    .parameters[0]
+                    .label
                 )
 
-            else:
-                best = filtered_results.iloc[0]
-
-                st.markdown("### Best result")
-
-                best1, best2, best3, best4 = st.columns(4)
-
-                with best1:
-                    st.metric(
-                        "Fast / slow MA",
-                        (
-                            f"{int(best['fast_ma'])}"
-                            f" / "
-                            f"{int(best['slow_ma'])}"
-                        ),
-                    )
-
-                with best2:
-                    st.metric(
-                        "Strategy return",
-                        f"{best['strategy_return']:+.1f}%",
-                    )
-
-                with best3:
-                    st.metric(
-                        "Excess vs hold",
-                        f"{best['excess_return']:+.1f} pp",
-                    )
-
-                with best4:
-                    st.metric(
-                        "Maximum drawdown",
-                        f"{best['max_drawdown']:.1f}%",
-                    )
-
-                st.markdown("### Ranked strategies")
-
-                display_results = filtered_results.copy()
-
-                display_results.insert(
-                    0,
-                    "rank",
-                    range(
-                        1,
-                        len(display_results) + 1,
-                    ),
-                )
-
-                display_results = display_results.rename(
-                    columns={
-                        "rank": "Rank",
-                        "fast_ma": "Fast MA",
-                        "slow_ma": "Slow MA",
-                        "final_value": "Final value (€)",
-                        "strategy_return": "Return (%)",
-                        "buy_hold_return": "Buy & hold (%)",
-                        "excess_return": "Excess return (pp)",
-                        "max_drawdown": "Max drawdown (%)",
-                        "completed_trades": "Trades",
-                        "win_rate": "Win rate (%)",
-                    }
-                )
-
-                numeric_columns = [
-                    "Final value (€)",
-                    "Return (%)",
-                    "Buy & hold (%)",
-                    "Excess return (pp)",
-                    "Max drawdown (%)",
-                    "Win rate (%)",
-                ]
-
-                display_results[numeric_columns] = (
-                    display_results[numeric_columns]
-                    .round(2)
-                )
-
-                st.dataframe(
-                    display_results,
-                    hide_index=True,
-                    use_container_width=True,
+                second_label = (
+                    selected_optimizer_strategy
+                    .parameters[1]
+                    .label
                 )
 
                 st.markdown("### Return heatmap")
 
                 heatmap_data = (
-                    filtered_results
+                    optimizer_results
                     .pivot_table(
-                        index="slow_ma",
-                        columns="fast_ma",
+                        index=second_parameter,
+                        columns=first_parameter,
                         values="strategy_return",
                         aggfunc="mean",
                     )
@@ -520,8 +542,8 @@ with strategy_lab_tab:
                 figure = px.imshow(
                     heatmap_data,
                     labels={
-                        "x": "Fast moving average",
-                        "y": "Slow moving average",
+                        "x": first_label,
+                        "y": second_label,
                         "color": "Return (%)",
                     },
                     aspect="auto",
@@ -533,13 +555,21 @@ with strategy_lab_tab:
                     use_container_width=True,
                 )
 
+            else:
                 st.info(
-                    "The highest historical return is not automatically "
-                    "the best strategy. Look for groups of nearby parameter "
-                    "combinations that perform reasonably well rather than "
-                    "one isolated winner."
+                    "This strategy has more than two parameters, "
+                    "so its full optimization results are shown in "
+                    "the ranked table rather than a two-dimensional "
+                    "heatmap."
                 )
 
+            st.info(
+                "The highest historical return is not automatically "
+                "the most reliable strategy. Look for stable regions "
+                "of nearby parameter combinations and confirm results "
+                "with walk-forward testing."
+            )
+            
 with walk_forward_tab:
     st.subheader("Out-of-sample Walk-Forward Test")
 

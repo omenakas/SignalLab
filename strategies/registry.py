@@ -22,6 +22,10 @@ class ParameterDefinition:
     maximum: int | float
     step: int | float
 
+    optimization_minimum: int | float
+    optimization_maximum: int | float
+    optimization_step: int | float
+
 
 @dataclass(frozen=True)
 class StrategyDefinition:
@@ -52,6 +56,9 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 minimum=2,
                 maximum=100,
                 step=1,
+                optimization_minimum=5,
+                optimization_maximum=40,
+                optimization_step=5,
             ),
             ParameterDefinition(
                 name="slow_window",
@@ -61,6 +68,9 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 minimum=3,
                 maximum=250,
                 step=1,
+                optimization_minimum=30,
+                optimization_maximum=150,
+                optimization_step=10,
             ),
         ),
     ),
@@ -77,6 +87,9 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 minimum=2,
                 maximum=100,
                 step=1,
+                optimization_minimum=7,
+                optimization_maximum=21,
+                optimization_step=7,
             ),
             ParameterDefinition(
                 name="oversold",
@@ -86,6 +99,9 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 minimum=1.0,
                 maximum=49.0,
                 step=1.0,
+                optimization_minimum=25.0,
+                optimization_maximum=35.0,
+                optimization_step=5.0,
             ),
             ParameterDefinition(
                 name="overbought",
@@ -95,6 +111,9 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 minimum=51.0,
                 maximum=99.0,
                 step=1.0,
+                optimization_minimum=65.0,
+                optimization_maximum=75.0,
+                optimization_step=5.0,
             ),
         ),
     ),
