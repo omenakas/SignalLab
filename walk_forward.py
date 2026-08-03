@@ -1,14 +1,44 @@
 from dataclasses import dataclass
+from typing import Any
 
 import pandas as pd
 
 from engine.simulator import run_position_backtest
-from optimizer import optimize_ma_strategy
-from strategies.ma_crossover import generate_ma_positions
+from optimizer import optimize_strategy
+from strategies.registry import StrategyDefinition, get_strategy
+
+
+@dataclass
+class GenericWalkForwardResult:
+    strategy_name: str
+    best_parameters: dict[str, Any]
+
+    split_index: int
+    train_rows: int
+    test_rows: int
+
+    train_return_pct: float
+    test_return_pct: float
+    test_buy_hold_return_pct: float
+    test_excess_return_pct: float
+
+    test_final_value: float
+    test_buy_hold_final_value: float
+    test_max_drawdown_pct: float
+    test_trades: int
+    test_win_rate_pct: float
+
+    optimization_results: pd.DataFrame
+    test_equity_curve: pd.DataFrame
+    test_trade_log: pd.DataFrame
 
 
 @dataclass
 class WalkForwardResult:
+    """
+    Compatibility result used by the existing MA Walk-Forward UI.
+    """
+
     fast_ma: int
     slow_ma: int
 
@@ -32,77 +62,84 @@ class WalkForwardResult:
     test_trade_log: pd.DataFrame
 
 
-def _find_price_column(df: pd.DataFrame) -> str:
+def _validate_parameter_grid(
+    strategy: StrategyDefinition,
+    parameter_grid: dict[str, list[Any]],
+) -> None:
     """
-    Find a likely price column without assuming one exact spelling.
+    Ensure the supplied grid contains only parameters registered
+    for the selected strategy.
     """
 
-    candidates = [
-        "price",
-        "Price",
-        "close",
-        "Close",
-        "usd",
-        "USD",
+    if not parameter_grid:
+        raise ValueError("The parameter grid is empty.")
+
+    valid_names = {
+        parameter.name
+        for parameter in strategy.parameters
+    }
+
+    supplied_names = set(parameter_grid)
+
+    unknown_names = supplied_names - valid_names
+
+    if unknown_names:
+        raise ValueError(
+            f"Unknown parameters for {strategy.name}: "
+            f"{sorted(unknown_names)}"
+        )
+
+    empty_parameters = [
+        name
+        for name, values in parameter_grid.items()
+        if not values
     ]
 
-    for column in candidates:
-        if column in df.columns:
-            return column
-
-    numeric_columns = df.select_dtypes(include="number").columns.tolist()
-
-    if len(numeric_columns) == 1:
-        return numeric_columns[0]
-
-    raise ValueError(
-        "Could not determine the price column. "
-        f"Available columns: {list(df.columns)}"
-    )
-
-
-def _get_value(row: pd.Series, possible_names: list[str]):
-    """
-    Read a value from an optimizer result even if its column naming
-    differs slightly.
-    """
-
-    for name in possible_names:
-        if name in row.index:
-            return row[name]
-
-    raise KeyError(
-        f"None of these columns were found: {possible_names}. "
-        f"Available columns: {list(row.index)}"
-    )
+    if empty_parameters:
+        raise ValueError(
+            "Parameter grid values cannot be empty: "
+            f"{empty_parameters}"
+        )
 
 
 def _test_unseen_period(
     full_df: pd.DataFrame,
     split_index: int,
-    fast_ma: int,
-    slow_ma: int,
+    strategy: StrategyDefinition,
+    parameters: dict[str, Any],
     initial_capital: float,
     fee_rate: float,
-) -> dict:
+):
     """
-    Generate MA positions using the full history for indicator context,
-    then evaluate only the unseen test period.
+    Generate positions using the complete historical dataframe so
+    indicators have access to pre-test context, but simulate only rows
+    belonging to the unseen test period.
     """
 
-    positions = generate_ma_positions(
+    positions = strategy.generator(
         df=full_df,
-        fast_window=fast_ma,
-        slow_window=slow_ma,
+        **parameters,
     )
 
-    if positions.empty:
-        raise ValueError("No valid MA positions were generated.")
+    if positions is None or positions.empty:
+        raise ValueError(
+            f"{strategy.name} generated no valid positions."
+        )
 
-    original_test_start_date = full_df.iloc[split_index]["date"]
+    if "date" not in full_df.columns:
+        raise ValueError(
+            "Historical data must contain a 'date' column."
+        )
+
+    if "date" not in positions.columns:
+        raise ValueError(
+            "Strategy output must contain a 'date' column."
+        )
+
+    test_start_date = full_df.iloc[split_index]["date"]
 
     test_positions = positions.loc[
-        positions["date"] >= original_test_start_date
+        positions["date"] >= test_start_date
     ].copy()
 
     if test_positions.empty:
@@ -110,37 +147,26 @@ def _test_unseen_period(
             "The testing period contains no valid strategy rows."
         )
 
-    simulation = run_position_backtest(
+    return run_position_backtest(
         df=test_positions,
         initial_capital=initial_capital,
         fee_rate=fee_rate,
     )
 
-    return {
-        "strategy_return_pct": simulation.strategy_return,
-        "buy_hold_return_pct": simulation.buy_hold_return,
-        "excess_return_pct": simulation.excess_return,
-        "final_value": simulation.final_value,
-        "buy_hold_final_value": simulation.buy_hold_final_value,
-        "max_drawdown_pct": simulation.max_drawdown,
-        "trades": simulation.completed_trades,
-        "win_rate_pct": simulation.win_rate,
-        "equity_curve": simulation.history,
-        "trade_log": simulation.trades,
-    }
 
-def walk_forward_test(
+def generic_walk_forward_test(
     df: pd.DataFrame,
-    fast_values,
-    slow_values,
+    strategy: StrategyDefinition,
+    parameter_grid: dict[str, list[Any]],
     train_fraction: float = 0.70,
     initial_capital: float = 500.0,
     fee_rate: float = 0.001,
     min_trades: int = 1,
-) -> WalkForwardResult:
+) -> GenericWalkForwardResult:
     """
-    Optimize on the earlier training period and evaluate the winning
-    parameters once on the later unseen period.
+    Optimize a registered strategy on the earlier training period,
+    freeze its best parameters, and evaluate them once on the later
+    unseen period.
     """
 
     if df is None or df.empty:
@@ -151,7 +177,44 @@ def walk_forward_test(
             "train_fraction must be between 0.5 and 0.9."
         )
 
-    data = df.copy().sort_index()
+    if initial_capital <= 0:
+        raise ValueError(
+            "Initial capital must be positive."
+        )
+
+    if not 0 <= fee_rate < 1:
+        raise ValueError(
+            "Fee rate must be between 0 and 1."
+        )
+
+    if min_trades < 0:
+        raise ValueError(
+            "Minimum trades cannot be negative."
+        )
+
+    _validate_parameter_grid(
+        strategy=strategy,
+        parameter_grid=parameter_grid,
+    )
+
+    data = df.copy()
+
+    if "date" not in data.columns:
+        raise ValueError(
+            "Historical data must contain a 'date' column."
+        )
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    data = (
+        data
+        .dropna(subset=["date"])
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
 
     split_index = int(len(data) * train_fraction)
 
@@ -168,84 +231,172 @@ def walk_forward_test(
             "The testing period is too short."
         )
 
-    optimization_results = optimize_ma_strategy(
-        train_df,
-        fast_values=fast_values,
-        slow_values=slow_values,
+    optimization_results = optimize_strategy(
+        df=train_df,
+        strategy=strategy,
+        parameter_grid=parameter_grid,
         initial_capital=initial_capital,
         fee_rate=fee_rate,
         min_trades=min_trades,
     )
 
-    if optimization_results is None or optimization_results.empty:
+    if optimization_results.empty:
         raise ValueError(
             "No valid strategies were found in the training period. "
             "Try lowering the minimum trade count or changing the "
-            "moving-average ranges."
+            "parameter ranges."
         )
 
     best_row = optimization_results.iloc[0]
 
+    selected_parameter_definitions = [
+        parameter
+        for parameter in strategy.parameters
+        if parameter.name in parameter_grid
+    ]
+
+    best_parameters: dict[str, Any] = {}
+
+    for parameter in selected_parameter_definitions:
+        value = best_row[parameter.name]
+
+        # Convert NumPy scalar values into ordinary Python values.
+        if hasattr(value, "item"):
+            value = value.item()
+
+        # Pandas may convert integer parameters to floats when reading
+        # a mixed-type result row, so restore the registered type.
+        if parameter.parameter_type == "int":
+            value = int(value)
+
+        elif parameter.parameter_type == "float":
+            value = float(value)
+
+        best_parameters[parameter.name] = value
+
+    train_return_pct = float(
+        best_row["strategy_return"]
+    )
+
+    test_simulation = _test_unseen_period(
+        full_df=data,
+        split_index=split_index,
+        strategy=strategy,
+        parameters=best_parameters,
+        initial_capital=initial_capital,
+        fee_rate=fee_rate,
+    )
+
+    return GenericWalkForwardResult(
+        strategy_name=strategy.name,
+        best_parameters=best_parameters,
+        split_index=split_index,
+        train_rows=len(train_df),
+        test_rows=len(test_df),
+        train_return_pct=train_return_pct,
+        test_return_pct=test_simulation.strategy_return,
+        test_buy_hold_return_pct=(
+            test_simulation.buy_hold_return
+        ),
+        test_excess_return_pct=(
+            test_simulation.excess_return
+        ),
+        test_final_value=test_simulation.final_value,
+        test_buy_hold_final_value=(
+            test_simulation.buy_hold_final_value
+        ),
+        test_max_drawdown_pct=(
+            test_simulation.max_drawdown
+        ),
+        test_trades=test_simulation.completed_trades,
+        test_win_rate_pct=test_simulation.win_rate,
+        optimization_results=optimization_results,
+        test_equity_curve=test_simulation.history,
+        test_trade_log=test_simulation.trades,
+    )
+
+
+def walk_forward_test(
+    df: pd.DataFrame,
+    fast_values,
+    slow_values,
+    train_fraction: float = 0.70,
+    initial_capital: float = 500.0,
+    fee_rate: float = 0.001,
+    min_trades: int = 1,
+) -> WalkForwardResult:
+    """
+    Compatibility wrapper for the current MA-specific Streamlit tab.
+
+    Internally, this uses the generic walk-forward implementation.
+    """
+
+    strategy = get_strategy("Moving Average")
+
+    generic_result = generic_walk_forward_test(
+        df=df,
+        strategy=strategy,
+        parameter_grid={
+            "fast_window": list(fast_values),
+            "slow_window": list(slow_values),
+        },
+        train_fraction=train_fraction,
+        initial_capital=initial_capital,
+        fee_rate=fee_rate,
+        min_trades=min_trades,
+    )
+
     fast_ma = int(
-        _get_value(
-            best_row,
-            ["fast_ma", "Fast MA", "fast", "Fast"],
-        )
+        generic_result.best_parameters["fast_window"]
     )
 
     slow_ma = int(
-        _get_value(
-            best_row,
-            ["slow_ma", "Slow MA", "slow", "Slow"],
-        )
+        generic_result.best_parameters["slow_window"]
     )
 
-    train_return_pct = float(
-        _get_value(
-            best_row,
-            [
-                "strategy_return",
-                "strategy_return_pct",
-                "return_pct",
-                "Return (%)",
-                "Strategy Return (%)",
-            ],
+    optimization_results = (
+        generic_result.optimization_results.rename(
+            columns={
+                "fast_window": "fast_ma",
+                "slow_window": "slow_ma",
+            }
         )
-    )
-
-    test_result = _test_unseen_period(
-        full_df=data,
-        split_index=split_index,
-        fast_ma=fast_ma,
-        slow_ma=slow_ma,
-        initial_capital=initial_capital,
-        fee_rate=fee_rate,
     )
 
     return WalkForwardResult(
         fast_ma=fast_ma,
         slow_ma=slow_ma,
-        split_index=split_index,
-        train_rows=len(train_df),
-        test_rows=len(test_df),
-        train_return_pct=train_return_pct,
-        test_return_pct=test_result["strategy_return_pct"],
-        test_buy_hold_return_pct=test_result[
-            "buy_hold_return_pct"
-        ],
-        test_excess_return_pct=test_result[
-            "excess_return_pct"
-        ],
-        test_final_value=test_result["final_value"],
-        test_buy_hold_final_value=test_result[
-            "buy_hold_final_value"
-        ],
-        test_max_drawdown_pct=test_result[
-            "max_drawdown_pct"
-        ],
-        test_trades=test_result["trades"],
-        test_win_rate_pct=test_result["win_rate_pct"],
+        split_index=generic_result.split_index,
+        train_rows=generic_result.train_rows,
+        test_rows=generic_result.test_rows,
+        train_return_pct=(
+            generic_result.train_return_pct
+        ),
+        test_return_pct=(
+            generic_result.test_return_pct
+        ),
+        test_buy_hold_return_pct=(
+            generic_result.test_buy_hold_return_pct
+        ),
+        test_excess_return_pct=(
+            generic_result.test_excess_return_pct
+        ),
+        test_final_value=(
+            generic_result.test_final_value
+        ),
+        test_buy_hold_final_value=(
+            generic_result.test_buy_hold_final_value
+        ),
+        test_max_drawdown_pct=(
+            generic_result.test_max_drawdown_pct
+        ),
+        test_trades=generic_result.test_trades,
+        test_win_rate_pct=(
+            generic_result.test_win_rate_pct
+        ),
         optimization_results=optimization_results,
-        test_equity_curve=test_result["equity_curve"],
-        test_trade_log=test_result["trade_log"],
+        test_equity_curve=(
+            generic_result.test_equity_curve
+        ),
+        test_trade_log=generic_result.test_trade_log,
     )
