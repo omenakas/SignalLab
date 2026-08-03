@@ -1,5 +1,7 @@
 # 🧪 SignalLab
 
+[![SignalLab Tests](https://github.com/omenakas/SignalLab/actions/workflows/python-tests.yml/badge.svg)](https://github.com/omenakas/SignalLab/actions/workflows/python-tests.yml)
+
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 
 ![Streamlit](https://img.shields.io/badge/Streamlit-App-red)
