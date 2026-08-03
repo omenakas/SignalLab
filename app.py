@@ -843,26 +843,22 @@ with walk_forward_tab:
                 st.exception(error)
 
 with comparison_tab:
-    st.subheader("Strategy Research")
+    st.subheader("Strategy Comparison")
 
     st.write(
         """
-        Select a registered strategy, adjust its parameters, and run it
-        through the generic simulator.
+        Compare several registered strategies over the same historical
+        period using their default parameters, identical starting
+        capital, and the same transaction fee.
         """
     )
 
-    selected_strategy_name = st.selectbox(
-        "Strategy",
+    selected_strategy_names = st.multiselect(
+        "Strategies to compare",
         options=list(STRATEGIES.keys()),
-        key="comparison_strategy",
+        default=list(STRATEGIES.keys()),
+        key="comparison_strategies",
     )
-
-    selected_strategy = get_strategy(
-        selected_strategy_name
-    )
-
-    st.caption(selected_strategy.description)
 
     comparison_col1, comparison_col2 = st.columns(2)
 
@@ -886,129 +882,455 @@ with comparison_tab:
             key="comparison_fee",
         )
 
-    st.markdown("### Strategy parameters")
-
-    strategy_parameters = build_parameter_inputs(
-        strategy=selected_strategy,
-        key_prefix="comparison",
+    show_comparison_details = st.checkbox(
+        "Show detailed charts for each strategy",
+        value=False,
+        key="comparison_show_details",
     )
 
+    if selected_strategy_names:
+        st.markdown("### Default parameters")
+
+        for strategy_name in selected_strategy_names:
+            strategy = get_strategy(strategy_name)
+
+            st.caption(
+                f"**{strategy.name}:** "
+                f"{strategy.default_parameters}"
+            )
+
     if st.button(
-        "Run strategy",
+        "Compare strategies",
         type="primary",
-        key="run_selected_strategy",
+        key="compare_selected_strategies",
     ):
-        try:
-            positions = selected_strategy.generator(
-                df=history,
-                **strategy_parameters,
+        if not selected_strategy_names:
+            st.warning(
+                "Select at least one strategy to compare."
             )
 
-            result = run_position_backtest(
-                df=positions,
-                initial_capital=comparison_capital,
-                fee_rate=comparison_fee / 100,
-            )
+        else:
+            generated_positions = {}
+            generation_errors = {}
 
-            st.markdown("### Results")
+            with st.spinner(
+                "Generating strategy positions..."
+            ):
+                for strategy_name in selected_strategy_names:
+                    strategy = get_strategy(strategy_name)
 
-            metric1, metric2, metric3, metric4 = st.columns(4)
+                    try:
+                        positions = strategy.generator(
+                            df=history,
+                            **strategy.default_parameters,
+                        )
 
-            metric1.metric(
-                "Strategy return",
-                f"{result.strategy_return:.2f}%",
-            )
+                        if positions is None or positions.empty:
+                            raise ValueError(
+                                "The strategy produced no valid rows."
+                            )
 
-            metric2.metric(
-                "Buy & hold",
-                f"{result.buy_hold_return:.2f}%",
-            )
+                        if "date" not in positions.columns:
+                            raise ValueError(
+                                "Strategy output contains no date column."
+                            )
 
-            metric3.metric(
-                "Excess return",
-                f"{result.excess_return:.2f} pp",
-            )
+                        positions = positions.copy()
 
-            metric4.metric(
-                "Maximum drawdown",
-                f"{result.max_drawdown:.2f}%",
-            )
+                        positions["date"] = pd.to_datetime(
+                            positions["date"],
+                            errors="coerce",
+                        )
 
-            detail1, detail2, detail3 = st.columns(3)
+                        positions = (
+                            positions
+                            .dropna(subset=["date"])
+                            .sort_values("date")
+                            .reset_index(drop=True)
+                        )
 
-            detail1.metric(
-                "Final value",
-                f"€{result.final_value:,.2f}",
-            )
+                        if positions.empty:
+                            raise ValueError(
+                                "No valid dated rows remain."
+                            )
 
-            detail2.metric(
-                "Completed trades",
-                result.completed_trades,
-            )
+                        generated_positions[strategy_name] = (
+                            positions
+                        )
 
-            detail3.metric(
-                "Win rate",
-                f"{result.win_rate:.1f}%",
-            )
+                    except ValueError as error:
+                        generation_errors[strategy_name] = str(
+                            error
+                        )
 
-            chart_data = (
-                result.history
-                .set_index("date")[
-                    [
-                        "strategy_value",
-                        "buy_hold_value",
-                    ]
-                ]
-                .rename(
-                    columns={
-                        "strategy_value": selected_strategy.name,
-                        "buy_hold_value": "Buy and hold",
-                    }
-                )
-            )
-
-            st.line_chart(chart_data)
-
-            st.markdown("### Price and trade activity")
-
-            trade_figure = plot_price_with_trades(
-                price_history=result.history,
-                trade_log=result.trades,
-                title=(
-                    f"{selected_strategy.name} — "
-                    "price and executed trades"
-                ),
-                overlays=selected_strategy.price_overlays,
-            )
-
-            st.plotly_chart(
-                trade_figure,
-                use_container_width=True,
-            )
-
-            for panel in selected_strategy.indicator_panels:
-
-                indicator_figure = plot_indicator_panel(
-                    dataframe=result.history,
-                    panel=panel,
+            for strategy_name, error_message in (
+                generation_errors.items()
+            ):
+                st.warning(
+                    f"{strategy_name} could not be generated: "
+                    f"{error_message}"
                 )
 
-                st.plotly_chart(
-                    indicator_figure,
-                    use_container_width=True,
+            if not generated_positions:
+                st.error(
+                    "None of the selected strategies could be evaluated."
                 )
 
-            with st.expander("Show trade history"):
-                if result.trades.empty:
-                    st.info(
-                        "This strategy made no trades."
+            else:
+                # Strategies have different indicator warm-up periods.
+                # Use the latest valid starting date so every strategy
+                # is evaluated over exactly the same historical period.
+                common_start_date = max(
+                    positions["date"].min()
+                    for positions
+                    in generated_positions.values()
+                )
+
+                comparison_results = []
+                simulations = {}
+                simulation_errors = {}
+
+                with st.spinner(
+                    "Running strategy comparison..."
+                ):
+                    for (
+                        strategy_name,
+                        positions,
+                    ) in generated_positions.items():
+                        strategy = get_strategy(
+                            strategy_name
+                        )
+
+                        common_positions = positions.loc[
+                            positions["date"]
+                            >= common_start_date
+                        ].copy()
+
+                        try:
+                            result = run_position_backtest(
+                                df=common_positions,
+                                initial_capital=(
+                                    comparison_capital
+                                ),
+                                fee_rate=(
+                                    comparison_fee / 100
+                                ),
+                            )
+
+                            simulations[strategy_name] = {
+                                "strategy": strategy,
+                                "positions": common_positions,
+                                "result": result,
+                            }
+
+                            comparison_results.append(
+                                {
+                                    "Strategy": strategy_name,
+                                    "Final value (€)": (
+                                        result.final_value
+                                    ),
+                                    "Return (%)": (
+                                        result.strategy_return
+                                    ),
+                                    "Buy & hold (%)": (
+                                        result.buy_hold_return
+                                    ),
+                                    "Excess return (pp)": (
+                                        result.excess_return
+                                    ),
+                                    "Max drawdown (%)": (
+                                        result.max_drawdown
+                                    ),
+                                    "Completed trades": (
+                                        result.completed_trades
+                                    ),
+                                    "Winning trades": (
+                                        result.winning_trades
+                                    ),
+                                    "Win rate (%)": (
+                                        result.win_rate
+                                    ),
+                                }
+                            )
+
+                        except ValueError as error:
+                            simulation_errors[
+                                strategy_name
+                            ] = str(error)
+
+                for strategy_name, error_message in (
+                    simulation_errors.items()
+                ):
+                    st.warning(
+                        f"{strategy_name} could not be "
+                        f"simulated: {error_message}"
                     )
+
+                if not comparison_results:
+                    st.error(
+                        "No strategy produced a valid simulation."
+                    )
+
                 else:
+                    st.caption(
+                        "Common comparison period begins "
+                        f"{common_start_date:%Y-%m-%d}."
+                    )
+
+                    results_df = pd.DataFrame(
+                        comparison_results
+                    )
+
+                    results_df = results_df.sort_values(
+                        by=[
+                            "Return (%)",
+                            "Max drawdown (%)",
+                        ],
+                        ascending=[
+                            False,
+                            False,
+                        ],
+                    ).reset_index(drop=True)
+
+                    results_df.insert(
+                        0,
+                        "Rank",
+                        range(
+                            1,
+                            len(results_df) + 1,
+                        ),
+                    )
+
+                    st.markdown("### Ranked results")
+
+                    best_result = results_df.iloc[0]
+
+                    summary1, summary2, summary3, summary4 = (
+                        st.columns(4)
+                    )
+
+                    summary1.metric(
+                        "Best strategy",
+                        best_result["Strategy"],
+                    )
+
+                    summary2.metric(
+                        "Best return",
+                        (
+                            f"{best_result['Return (%)']:+.2f}%"
+                        ),
+                    )
+
+                    summary3.metric(
+                        "Excess vs hold",
+                        (
+                            f"{best_result['Excess return (pp)']} pp"
+                        ),
+                    )
+
+                    summary4.metric(
+                        "Maximum drawdown",
+                        (
+                            f"{best_result['Max drawdown (%)']}%"
+                        ),
+                    )
+
+                    display_results = results_df.copy()
+
+                    numeric_columns = [
+                        "Final value (€)",
+                        "Return (%)",
+                        "Buy & hold (%)",
+                        "Excess return (pp)",
+                        "Max drawdown (%)",
+                        "Win rate (%)",
+                    ]
+
+                    display_results[numeric_columns] = (
+                        display_results[
+                            numeric_columns
+                        ].round(2)
+                    )
+
                     st.dataframe(
-                        result.trades,
+                        display_results,
                         hide_index=True,
                         use_container_width=True,
                     )
 
-        except ValueError as error:
-            st.warning(str(error))
+                    st.markdown(
+                        "### Portfolio performance"
+                    )
+
+                    equity_curves = {}
+
+                    for (
+                        strategy_name,
+                        simulation_data,
+                    ) in simulations.items():
+                        result = simulation_data["result"]
+
+                        equity_curves[strategy_name] = (
+                            result.history
+                            .set_index("date")[
+                                "strategy_value"
+                            ]
+                            .rename(strategy_name)
+                        )
+
+                    # Because every simulation begins on the same
+                    # date, one buy-and-hold curve is sufficient.
+                    first_simulation = next(
+                        iter(simulations.values())
+                    )
+
+                    first_result = (
+                        first_simulation["result"]
+                    )
+
+                    equity_curves["Buy and hold"] = (
+                        first_result.history
+                        .set_index("date")[
+                            "buy_hold_value"
+                        ]
+                        .rename("Buy and hold")
+                    )
+
+                    equity_df = pd.concat(
+                        equity_curves.values(),
+                        axis=1,
+                    )
+
+                    st.line_chart(
+                        equity_df,
+                        use_container_width=True,
+                    )
+
+                    st.markdown(
+                        "### Return and drawdown comparison"
+                    )
+
+                    comparison_chart_data = (
+                        results_df
+                        .set_index("Strategy")[
+                            [
+                                "Return (%)",
+                                "Max drawdown (%)",
+                            ]
+                        ]
+                    )
+
+                    st.bar_chart(
+                        comparison_chart_data,
+                        use_container_width=True,
+                    )
+
+                    if show_comparison_details:
+                        st.markdown(
+                            "### Detailed strategy results"
+                        )
+
+                        for (
+                            strategy_name,
+                            simulation_data,
+                        ) in simulations.items():
+                            strategy = simulation_data[
+                                "strategy"
+                            ]
+
+                            result = simulation_data[
+                                "result"
+                            ]
+
+                            with st.expander(
+                                f"{strategy_name} details"
+                            ):
+                                st.write(
+                                    strategy.description
+                                )
+
+                                st.caption(
+                                    "Parameters: "
+                                    f"{strategy.default_parameters}"
+                                )
+
+                                detail1, detail2, detail3 = (
+                                    st.columns(3)
+                                )
+
+                                detail1.metric(
+                                    "Return",
+                                    (
+                                        f"{result.strategy_return}%"
+                                    ),
+                                )
+
+                                detail2.metric(
+                                    "Trades",
+                                    result.completed_trades,
+                                )
+
+                                detail3.metric(
+                                    "Win rate",
+                                    (
+                                        f"{result.win_rate}%"
+                                    ),
+                                )
+
+                                trade_figure = (
+                                    plot_price_with_trades(
+                                        price_history=(
+                                            result.history
+                                        ),
+                                        trade_log=result.trades,
+                                        title=(
+                                            f"{strategy.name} — "
+                                            "price and trades"
+                                        ),
+                                        overlays=(
+                                            strategy.price_overlays
+                                        ),
+                                    )
+                                )
+
+                                st.plotly_chart(
+                                    trade_figure,
+                                    use_container_width=True,
+                                )
+
+                                for panel in (
+                                    strategy.indicator_panels
+                                ):
+                                    indicator_figure = (
+                                        plot_indicator_panel(
+                                            dataframe=(
+                                                result.history
+                                            ),
+                                            panel=panel,
+                                        )
+                                    )
+
+                                    st.plotly_chart(
+                                        indicator_figure,
+                                        use_container_width=True,
+                                    )
+
+                                if result.trades.empty:
+                                    st.info(
+                                        "This strategy made "
+                                        "no trades."
+                                    )
+
+                                else:
+                                    st.dataframe(
+                                        result.trades,
+                                        hide_index=True,
+                                        use_container_width=True,
+                                    )
+
+                    st.warning(
+                        "This comparison uses each strategy's default "
+                        "parameters over one shared historical period. "
+                        "Ranking first in this table does not establish "
+                        "future profitability."
+                    )
