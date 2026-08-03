@@ -20,6 +20,7 @@ from ui.charts import (
     plot_indicator_panel,
     plot_price_with_trades,
 )
+from analytics.performance import calculate_performance_metrics
 
 
 
@@ -181,6 +182,10 @@ with backtest_tab:
             initial_capital=initial_capital,
             fee_rate=fee_percentage / 100,
         )
+        performance_metrics = calculate_performance_metrics(
+            history=result.history,
+        )
+        
 
     except ValueError as error:
         st.warning(str(error))
@@ -1016,6 +1021,10 @@ with comparison_tab:
                                     comparison_fee / 100
                                 ),
                             )
+                            performance_metrics = calculate_performance_metrics(
+                                history=result.history,
+                            )
+                            
 
                             simulations[strategy_name] = {
                                 "strategy": strategy,
@@ -1038,6 +1047,7 @@ with comparison_tab:
                                     "Excess return (pp)": (
                                         result.excess_return
                                     ),
+                                    "Sharpe ratio": performance_metrics.sharpe_ratio,
                                     "Max drawdown (%)": (
                                         result.max_drawdown
                                     ),
@@ -1129,10 +1139,8 @@ with comparison_tab:
                     )
 
                     summary4.metric(
-                        "Maximum drawdown",
-                        (
-                            f"{best_result['Max drawdown (%)']}%"
-                        ),
+                        "Sharpe ratio",
+                        f"{best_result['Sharpe ratio']:.2f}",
                     )
 
                     display_results = results_df.copy()
@@ -1142,6 +1150,7 @@ with comparison_tab:
                         "Return (%)",
                         "Buy & hold (%)",
                         "Excess return (pp)",
+                        "Sharpe ratio",
                         "Max drawdown (%)",
                         "Win rate (%)",
                     ]
