@@ -974,6 +974,7 @@ with comparison_tab:
                     f"{selected_strategy.name} — "
                     "price and executed trades"
                 ),
+                overlays=selected_strategy.price_overlays,
             )
 
             st.plotly_chart(

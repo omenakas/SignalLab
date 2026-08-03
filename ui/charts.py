@@ -8,6 +8,7 @@ def plot_price_with_trades(
     price_history: pd.DataFrame,
     trade_log: pd.DataFrame | None,
     title: str = "Price and trades",
+    overlays: dict[str, str] | None = None,
 ) -> go.Figure:
     """
     Plot historical prices with BUY and SELL markers.
@@ -72,6 +73,47 @@ def plot_price_with_trades(
             ),
         )
     )
+    
+    if overlays:
+        for display_name, column_name in overlays.items():
+            if column_name not in price_history.columns:
+                continue
+
+            overlay_data = price_history[
+                ["date", column_name]
+            ].copy()
+
+            overlay_data["date"] = pd.to_datetime(
+                overlay_data["date"],
+                errors="coerce",
+            )
+
+            overlay_data[column_name] = pd.to_numeric(
+                overlay_data[column_name],
+                errors="coerce",
+            )
+
+            overlay_data = overlay_data.dropna(
+                subset=["date", column_name]
+            )
+
+            if overlay_data.empty:
+                continue
+
+            figure.add_trace(
+                go.Scatter(
+                    x=overlay_data["date"],
+                    y=overlay_data[column_name],
+                    mode="lines",
+                    name=display_name,
+                    hovertemplate=(
+                        f"{display_name}<br>"
+                        "%{x|%Y-%m-%d}<br>"
+                        "Value: €%{y:,.2f}"
+                        "<extra></extra>"
+                    ),
+                )
+            )
 
     if trade_log is not None and not trade_log.empty:
         required_trade_columns = {

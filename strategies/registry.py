@@ -34,6 +34,7 @@ class StrategyDefinition:
     generator: StrategyGenerator
     description: str
     parameters: tuple[ParameterDefinition, ...]
+    price_overlays: dict[str, str] | None = None
 
     @property
     def default_parameters(self) -> dict[str, Any]:
@@ -74,6 +75,10 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 optimization_step=10,
             ),
         ),
+        price_overlays={
+            "Fast MA": "fast_ma",
+            "Slow MA": "slow_ma",
+        },
     ),
     "RSI": StrategyDefinition(
         name="RSI",
@@ -117,6 +122,7 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 optimization_step=5.0,
             ),
         ),
+        price_overlays=None,
     ),
     "MACD": StrategyDefinition(
         name="MACD",
@@ -163,6 +169,7 @@ STRATEGIES: dict[str, StrategyDefinition] = {
                 optimization_step=2,
             ),
         ),
+        price_overlays=None,
     ),
 }
 
