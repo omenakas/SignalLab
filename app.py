@@ -3,7 +3,6 @@ import plotly.express as px
 import pandas as pd
 
 from walk_forward import walk_forward_test
-
 from backtest import run_backtest
 from indicators import add_indicators
 from market import get_history, get_prices
@@ -12,7 +11,7 @@ from strategy import analyze_market
 from engine.simulator import run_position_backtest
 from strategies.registry import STRATEGIES, get_strategy
 from ui.parameter_builder import build_parameter_inputs
-
+from ui.charts import plot_price_with_trades
 from optimizer import optimize_strategy
 from ui.parameter_builder import (
     build_optimization_grid_inputs,
@@ -569,7 +568,7 @@ with strategy_lab_tab:
                 "of nearby parameter combinations and confirm results "
                 "with walk-forward testing."
             )
-            
+
 with walk_forward_tab:
     st.subheader("Out-of-sample Walk-Forward Test")
 
@@ -965,6 +964,22 @@ with comparison_tab:
             )
 
             st.line_chart(chart_data)
+
+            st.markdown("### Price and trade activity")
+
+            trade_figure = plot_price_with_trades(
+                price_history=result.history,
+                trade_log=result.trades,
+                title=(
+                    f"{selected_strategy.name} — "
+                    "price and executed trades"
+                ),
+            )
+
+            st.plotly_chart(
+                trade_figure,
+                use_container_width=True,
+            )
 
             with st.expander("Show trade history"):
                 if result.trades.empty:
