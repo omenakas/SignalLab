@@ -27,6 +27,18 @@ class ParameterDefinition:
     optimization_maximum: int | float
     optimization_step: int | float
 
+@dataclass(frozen=True)
+class ChartSeries:
+    label: str
+    column: str
+    chart_type: Literal["line", "bar"] = "line"
+    
+@dataclass(frozen=True)
+class ChartPanel:
+    title: str
+    series: tuple[ChartSeries, ...]
+    reference_lines: tuple[float, ...] = ()
+    y_axis_title: str | None = None
 
 @dataclass(frozen=True)
 class StrategyDefinition:
@@ -35,6 +47,7 @@ class StrategyDefinition:
     description: str
     parameters: tuple[ParameterDefinition, ...]
     price_overlays: dict[str, str] | None = None
+    indicator_panels: tuple[ChartPanel, ...] = ()
 
     @property
     def default_parameters(self) -> dict[str, Any]:
@@ -42,6 +55,8 @@ class StrategyDefinition:
             parameter.name: parameter.default
             for parameter in self.parameters
         }
+    
+
 
 
 STRATEGIES: dict[str, StrategyDefinition] = {
@@ -123,6 +138,19 @@ STRATEGIES: dict[str, StrategyDefinition] = {
             ),
         ),
         price_overlays=None,
+        indicator_panels=(
+            ChartPanel(
+                title="Relative Strength Index",
+                series=(
+                    ChartSeries(
+                        label="RSI",
+                        column="RSI",
+                    ),
+                ),
+                reference_lines=(30.0, 70.0),
+                y_axis_title="RSI",
+            ),
+        ),
     ),
     "MACD": StrategyDefinition(
         name="MACD",
@@ -170,6 +198,28 @@ STRATEGIES: dict[str, StrategyDefinition] = {
             ),
         ),
         price_overlays=None,
+        indicator_panels=(
+            ChartPanel(
+                title="MACD",
+                series=(
+                    ChartSeries(
+                        label="MACD",
+                        column="macd",
+                    ),
+                    ChartSeries(
+                        label="Signal line",
+                        column="signal_line",
+                    ),
+                    ChartSeries(
+                        label="Histogram",
+                        column="macd_histogram",
+                        chart_type="bar",
+                    ),
+                ),
+                reference_lines=(0.0,),
+                y_axis_title="MACD value",
+            ),
+        ),
     ),
 }
 

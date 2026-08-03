@@ -16,6 +16,10 @@ from optimizer import optimize_strategy
 from ui.parameter_builder import (
     build_optimization_grid_inputs,
 )
+from ui.charts import (
+    plot_indicator_panel,
+    plot_price_with_trades,
+)
 
 
 
@@ -981,6 +985,18 @@ with comparison_tab:
                 trade_figure,
                 use_container_width=True,
             )
+
+            for panel in selected_strategy.indicator_panels:
+
+                indicator_figure = plot_indicator_panel(
+                    dataframe=result.history,
+                    panel=panel,
+                )
+
+                st.plotly_chart(
+                    indicator_figure,
+                    use_container_width=True,
+                )
 
             with st.expander("Show trade history"):
                 if result.trades.empty:

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from strategies.registry import ChartPanel
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -73,7 +74,7 @@ def plot_price_with_trades(
             ),
         )
     )
-    
+
     if overlays:
         for display_name, column_name in overlays.items():
             if column_name not in price_history.columns:
@@ -216,6 +217,108 @@ def plot_price_with_trades(
             "t": 60,
             "b": 40,
         },
+    )
+
+    return figure
+
+def plot_indicator_panel(
+    dataframe: pd.DataFrame,
+    panel: ChartPanel,
+) -> go.Figure:
+    """
+    Plot a generic indicator panel from ChartPanel metadata.
+    """
+
+    figure = go.Figure()
+
+    data = dataframe.copy()
+
+    if "date" not in data.columns:
+        raise ValueError(
+            "Dataframe must contain a 'date' column."
+        )
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    for series in panel.series:
+
+        if series.column not in data.columns:
+            continue
+
+        plot_data = data[
+            ["date", series.column]
+        ].copy()
+
+        plot_data[series.column] = pd.to_numeric(
+            plot_data[series.column],
+            errors="coerce",
+        )
+
+        plot_data = plot_data.dropna()
+
+        if plot_data.empty:
+            continue
+
+        if series.chart_type == "line":
+
+            figure.add_trace(
+                go.Scatter(
+                    x=plot_data["date"],
+                    y=plot_data[series.column],
+                    mode="lines",
+                    name=series.label,
+                )
+            )
+
+        elif series.chart_type == "bar":
+
+            figure.add_trace(
+                go.Bar(
+                    x=plot_data["date"],
+                    y=plot_data[series.column],
+                    name=series.label,
+                )
+            )
+
+    #
+    # Reference lines
+    #
+
+    if panel.reference_lines:
+
+        x_min = data["date"].min()
+        x_max = data["date"].max()
+
+        for value in panel.reference_lines:
+
+            figure.add_trace(
+                go.Scatter(
+                    x=[x_min, x_max],
+                    y=[value, value],
+                    mode="lines",
+                    name=str(value),
+                    line=dict(
+                        dash="dash",
+                    ),
+                    hoverinfo="skip",
+                )
+            )
+
+    figure.update_layout(
+        title=panel.title,
+        xaxis_title="Date",
+        yaxis_title=panel.y_axis_title,
+        hovermode="x unified",
+        barmode="relative",
+        margin=dict(
+            l=40,
+            r=20,
+            t=60,
+            b=40,
+        ),
     )
 
     return figure
