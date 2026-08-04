@@ -41,6 +41,7 @@ def test_metrics_return_zero_for_insufficient_history():
         sharpe_ratio=0.0,
         cagr=0.0,
         sortino_ratio=0.0,
+        calmar_ratio=0.0,
     )
 
 
@@ -116,14 +117,16 @@ def test_metrics_ignore_invalid_rows_and_sort_dates():
 def test_performance_metrics_as_dict():
     metrics = PerformanceMetrics(
         sharpe_ratio=1.25,
-        cagr=18.5,
         sortino_ratio=1.75,
+        cagr=18.5,
+        calmar_ratio=0.8,
     )
 
     assert metrics.as_dict() == {
         "Sharpe ratio": 1.25,
         "Sortino ratio": 1.75,
         "CAGR (%)": 18.5,
+        "Calmar ratio": 0.8,
     }
 
 
@@ -132,6 +135,7 @@ def test_performance_metrics_as_dict_returns_new_dictionary():
         sharpe_ratio=1.25,
         cagr=18.5,
         sortino_ratio=1.75,
+        calmar_ratio=0.8,
     )
 
     first = metrics.as_dict()
@@ -205,3 +209,71 @@ def test_sortino_ignores_positive_returns_as_downside():
     metrics = calculate_performance_metrics(history)
 
     assert math.isfinite(metrics.sortino_ratio)
+
+def test_flat_portfolio_has_zero_calmar():
+    history = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=366,
+                freq="D",
+            ),
+            "strategy_value": [500.0] * 366,
+        }
+    )
+
+    metrics = calculate_performance_metrics(history)
+
+    assert metrics.calmar_ratio == 0.0
+
+
+def test_calmar_uses_cagr_and_maximum_drawdown():
+    history = pd.DataFrame(
+        {
+            "date": [
+                "2025-01-01",
+                "2025-05-01",
+                "2025-09-01",
+                "2026-01-01",
+            ],
+            "strategy_value": [
+                500.0,
+                600.0,
+                480.0,
+                550.0,
+            ],
+        }
+    )
+
+    metrics = calculate_performance_metrics(history)
+
+    # Peak-to-trough drawdown:
+    # 600 -> 480 = -20%
+    expected_calmar = metrics.cagr / 20.0
+
+    assert metrics.calmar_ratio == pytest.approx(
+        expected_calmar,
+        rel=1e-10,
+    )
+
+
+def test_losing_portfolio_can_have_negative_calmar():
+    history = pd.DataFrame(
+        {
+            "date": [
+                "2025-01-01",
+                "2025-06-01",
+                "2026-01-01",
+            ],
+            "strategy_value": [
+                500.0,
+                450.0,
+                400.0,
+            ],
+        }
+    )
+
+    metrics = calculate_performance_metrics(history)
+
+    assert math.isfinite(metrics.calmar_ratio)
+    assert metrics.calmar_ratio < 0

@@ -9,14 +9,16 @@ import pandas as pd
 @dataclass(frozen=True)
 class PerformanceMetrics:
     sharpe_ratio: float
-    cagr: float
     sortino_ratio: float
+    cagr: float
+    calmar_ratio: float
 
     def as_dict(self) -> dict[str, float]:
         return {
             "Sharpe ratio": self.sharpe_ratio,
             "Sortino ratio": self.sortino_ratio,
             "CAGR (%)": self.cagr,
+            "Calmar ratio": self.calmar_ratio,
         }
     
 def calculate_performance_metrics(
@@ -81,8 +83,9 @@ def calculate_performance_metrics(
     if len(data) < 2:
         return PerformanceMetrics(
             sharpe_ratio=0.0,
-            cagr=0.0,
             sortino_ratio=0.0,
+            cagr=0.0,
+            calmar_ratio=0.0,
         )
 
     values = data["strategy_value"]
@@ -126,6 +129,28 @@ def calculate_performance_metrics(
                 ** (1 / 365)
                 - 1
             )
+    
+    running_max = values.cummax()
+
+    drawdowns = (
+        values / running_max - 1
+    )
+
+    maximum_drawdown_pct = abs(
+        float(drawdowns.min()) * 100
+    )
+
+    if (
+        not np.isfinite(maximum_drawdown_pct)
+        or maximum_drawdown_pct == 0
+    ):
+        calmar = 0.0
+
+    else:
+        calmar = cagr / maximum_drawdown_pct
+
+        if not np.isfinite(calmar):
+            calmar = 0.0
 
     if returns.empty:
         sharpe = 0.0
@@ -186,6 +211,7 @@ def calculate_performance_metrics(
     
     return PerformanceMetrics(
         sharpe_ratio=float(sharpe),
-        cagr=float(cagr),
         sortino_ratio=float(sortino),
+        cagr=float(cagr),
+        calmar_ratio=float(calmar),
     )
