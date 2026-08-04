@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+
 @dataclass(frozen=True)
 class PerformanceMetrics:
     """
@@ -15,6 +16,16 @@ class PerformanceMetrics:
     sharpe_ratio: float
     cagr: float
 
+    def as_dict(self) -> dict[str, float]:
+        """
+        Return display-ready metric names and values.
+        """
+
+        return {
+            "Sharpe ratio": self.sharpe_ratio,
+            "CAGR (%)": self.cagr,
+        }
+    
 def calculate_performance_metrics(
     history: pd.DataFrame,
     risk_free_rate: float = 0.0,

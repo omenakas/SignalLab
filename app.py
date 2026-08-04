@@ -1047,8 +1047,7 @@ with comparison_tab:
                                     "Excess return (pp)": (
                                         result.excess_return
                                     ),
-                                    "Sharpe ratio": performance_metrics.sharpe_ratio,
-                                    "CAGR (%)": performance_metrics.cagr,
+                                    **performance_metrics.as_dict(),
                                     "Max drawdown (%)": (
                                         result.max_drawdown
                                     ),

@@ -111,3 +111,27 @@ def test_metrics_ignore_invalid_rows_and_sort_dates():
 
     assert math.isfinite(metrics.sharpe_ratio)
     assert metrics.cagr > 0
+
+def test_performance_metrics_as_dict():
+    metrics = PerformanceMetrics(
+        sharpe_ratio=1.25,
+        cagr=18.5,
+    )
+
+    assert metrics.as_dict() == {
+        "Sharpe ratio": 1.25,
+        "CAGR (%)": 18.5,
+    }
+
+
+def test_performance_metrics_as_dict_returns_new_dictionary():
+    metrics = PerformanceMetrics(
+        sharpe_ratio=1.25,
+        cagr=18.5,
+    )
+
+    first = metrics.as_dict()
+    second = metrics.as_dict()
+
+    assert first == second
+    assert first is not second
