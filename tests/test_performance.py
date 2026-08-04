@@ -40,6 +40,7 @@ def test_metrics_return_zero_for_insufficient_history():
     assert metrics == PerformanceMetrics(
         sharpe_ratio=0.0,
         cagr=0.0,
+        sortino_ratio=0.0,
     )
 
 
@@ -116,10 +117,12 @@ def test_performance_metrics_as_dict():
     metrics = PerformanceMetrics(
         sharpe_ratio=1.25,
         cagr=18.5,
+        sortino_ratio=1.75,
     )
 
     assert metrics.as_dict() == {
         "Sharpe ratio": 1.25,
+        "Sortino ratio": 1.75,
         "CAGR (%)": 18.5,
     }
 
@@ -128,6 +131,7 @@ def test_performance_metrics_as_dict_returns_new_dictionary():
     metrics = PerformanceMetrics(
         sharpe_ratio=1.25,
         cagr=18.5,
+        sortino_ratio=1.75,
     )
 
     first = metrics.as_dict()
@@ -135,3 +139,69 @@ def test_performance_metrics_as_dict_returns_new_dictionary():
 
     assert first == second
     assert first is not second
+
+def test_flat_portfolio_has_zero_sortino():
+    history = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=10,
+                freq="D",
+            ),
+            "strategy_value": [500.0] * 10,
+        }
+    )
+
+    metrics = calculate_performance_metrics(history)
+
+    assert metrics.sortino_ratio == 0.0
+
+
+def test_losing_portfolio_has_negative_sortino():
+    history = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=6,
+                freq="D",
+            ),
+            "strategy_value": [
+                500.0,
+                490.0,
+                495.0,
+                475.0,
+                470.0,
+                450.0,
+            ],
+        }
+    )
+
+    metrics = calculate_performance_metrics(history)
+
+    assert math.isfinite(metrics.sortino_ratio)
+    assert metrics.sortino_ratio < 0
+
+
+def test_sortino_ignores_positive_returns_as_downside():
+    history = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=7,
+                freq="D",
+            ),
+            "strategy_value": [
+                500.0,
+                510.0,
+                505.0,
+                520.0,
+                515.0,
+                530.0,
+                525.0,
+            ],
+        }
+    )
+
+    metrics = calculate_performance_metrics(history)
+
+    assert math.isfinite(metrics.sortino_ratio)

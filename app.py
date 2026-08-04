@@ -1147,6 +1147,7 @@ with comparison_tab:
                         "Buy & hold (%)",
                         "Excess return (pp)",
                         "Sharpe ratio",
+                        "Sortino ratio",
                         "CAGR (%)",
                         "Max drawdown (%)",
                         "Win rate (%)",

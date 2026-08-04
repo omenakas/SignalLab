@@ -8,21 +8,14 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class PerformanceMetrics:
-    """
-    Risk-adjusted performance metrics calculated from a completed
-    backtest.
-    """
-
     sharpe_ratio: float
     cagr: float
+    sortino_ratio: float
 
     def as_dict(self) -> dict[str, float]:
-        """
-        Return display-ready metric names and values.
-        """
-
         return {
             "Sharpe ratio": self.sharpe_ratio,
+            "Sortino ratio": self.sortino_ratio,
             "CAGR (%)": self.cagr,
         }
     
@@ -89,6 +82,7 @@ def calculate_performance_metrics(
         return PerformanceMetrics(
             sharpe_ratio=0.0,
             cagr=0.0,
+            sortino_ratio=0.0,
         )
 
     values = data["strategy_value"]
@@ -127,29 +121,34 @@ def calculate_performance_metrics(
         .dropna()
     )
 
-    if returns.empty:
-        sharpe = 0.0
-
-    else:
-        volatility = float(
-            returns.std(ddof=1)
-        )
-
-        if not np.isfinite(volatility) or volatility == 0:
-            sharpe = 0.0
-
-        else:
-            daily_risk_free_rate = (
+    daily_risk_free_rate = (
                 (1 + risk_free_rate)
                 ** (1 / 365)
                 - 1
             )
 
+    if returns.empty:
+        sharpe = 0.0
+        sortino = 0.0
+
+    else:
+        excess_returns = (
+            returns - daily_risk_free_rate
+        )
+
+        volatility = float(
+            returns.std(ddof=1)
+        )
+
+        if (
+            not np.isfinite(volatility)
+            or volatility == 0
+        ):
+            sharpe = 0.0
+
+        else:
             sharpe = (
-                (
-                    float(returns.mean())
-                    - daily_risk_free_rate
-                )
+                float(excess_returns.mean())
                 / volatility
                 * np.sqrt(365)
             )
@@ -157,7 +156,36 @@ def calculate_performance_metrics(
             if not np.isfinite(sharpe):
                 sharpe = 0.0
 
+        downside_returns = excess_returns.clip(
+            upper=0.0
+        )
+
+        downside_deviation = float(
+            np.sqrt(
+                np.mean(
+                    np.square(downside_returns)
+                )
+            )
+        )
+
+        if (
+            not np.isfinite(downside_deviation)
+            or downside_deviation == 0
+        ):
+            sortino = 0.0
+
+        else:
+            sortino = (
+                float(excess_returns.mean())
+                / downside_deviation
+                * np.sqrt(365)
+            )
+
+            if not np.isfinite(sortino):
+                sortino = 0.0
+    
     return PerformanceMetrics(
         sharpe_ratio=float(sharpe),
         cagr=float(cagr),
+        sortino_ratio=float(sortino),
     )
