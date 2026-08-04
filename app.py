@@ -21,6 +21,9 @@ from ui.charts import (
     plot_price_with_trades,
 )
 from analytics.performance import calculate_performance_metrics
+from ui.performance_dashboard import (
+    render_performance_dashboard,
+)
 
 
 
@@ -1115,29 +1118,11 @@ with comparison_tab:
 
                     best_result = results_df.iloc[0]
 
-                    summary1, summary2, summary3, summary4 = (
-                        st.columns(4)
+                    render_performance_dashboard(
+                        best_result=best_result,
                     )
 
-                    summary1.metric(
-                        "Best strategy",
-                        best_result["Strategy"],
-                    )
-
-                    summary2.metric(
-                        "Return",
-                        f"{best_result['Return (%)']:+.2f}%",
-                    )
-
-                    summary3.metric(
-                        "Sharpe",
-                        f"{best_result['Sharpe ratio']:.2f}",
-                    )
-
-                    summary4.metric(
-                        "CAGR",
-                        f"{best_result['CAGR (%)']:+.2f}%",
-                    )
+                    
 
                     display_results = results_df.copy()
 
@@ -1149,6 +1134,7 @@ with comparison_tab:
                         "Sharpe ratio",
                         "Sortino ratio",
                         "CAGR (%)",
+                        "Calmar ratio",
                         "Max drawdown (%)",
                         "Win rate (%)",
                     ]
