@@ -1,275 +1,211 @@
-# 🧪 SignalLab
+# 📊 SignalLab
 
-[![SignalLab Tests](https://github.com/omenakas/SignalLab/actions/workflows/python-tests.yml/badge.svg)](https://github.com/omenakas/SignalLab/actions/workflows/python-tests.yml)
+> **A modular laboratory for quantitative trading research.**
 
-![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?logo=streamlit&logoColor=white)
+![Architecture](https://img.shields.io/badge/Architecture-Modular-purple)
+![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Active-success)
+![Version](https://img.shields.io/badge/Version-v0.9.0-blue)
 
-![Streamlit](https://img.shields.io/badge/Streamlit-App-red)
+**Develop • Backtest • Compare • Analyze**
 
-![Version](https://img.shields.io/badge/version-0.6.0-orange)
-
-![Status](https://img.shields.io/badge/status-active-brightgreen)
-
-## Screenshot
-
-![SignalLab Dashboard](assets/dashboard.png)
-
-SignalLab is a modular quantitative research platform for researching, testing, and comparing algorithmic trading strategies using historical market data.
-
-The project began as a cryptocurrency trading assistant and has evolved into a flexible research framework built around reusable strategies, a generic trading simulator, and a modular architecture.
-
-> **Disclaimer:** SignalLab is an educational and research project. It does **not** provide financial advice, and historical performance does not guarantee future results.
+![SignalLab Home](screenshots/home.png)
 
 ---
 
-# ✨ Features
+## ✨ Features
 
-Current capabilities include:
+SignalLab is a modular research platform for developing, testing and evaluating quantitative trading strategies.
 
-- 📈 Live cryptocurrency market dashboard
-- 💾 Persistent local caching of historical market data
-- 📊 Technical indicators
-  - Moving Averages
-  - Relative Strength Index (RSI)
-- ⚙️ Generic trading simulator
-- 💰 Transaction fee modelling
-- 📉 Maximum drawdown calculation
-- 📊 Buy & Hold benchmark comparison
-- 🔬 Strategy optimization
-- 🚶 Walk-forward validation
-- 🧪 Multi-strategy comparison
-- 🧩 Modular strategy registry
-- ✅ Automated testing with pytest
+### 📈 Strategy Analysis
+- Interactive market data analysis
+- Technical indicators
+- Strategy signal visualization
+
+### 💰 Backtesting
+- Generic backtesting engine
+- Transaction fee simulation
+- Trade history
+- Portfolio equity tracking
+
+### 🧪 Strategy Lab
+- Parameter experimentation
+- Modular strategy registry
+- Rapid strategy evaluation
+
+### 🔄 Walk-Forward Validation
+- Out-of-sample testing
+- Rolling evaluation windows
+- Strategy robustness assessment
+
+### 📊 Strategy Research
+- Performance dashboard
+- Strategy comparison
+- Equity curve comparison
+- Drawdown analysis
+- Rolling Sharpe Ratio
+- Monthly Returns Heatmap
+- Performance highlights
+- Risk metrics (Sharpe, Sortino, Calmar, CAGR)
+
+---
+
+# 📸 Screenshots
+
+## Strategy Research Dashboard
+
+![Dashboard](screenshots/strategy-research-dashboard.png)
+
+---
+
+## Equity Curve Comparison
+
+![Equity Curves](screenshots/equity-curves.png)
+
+---
+
+## Price & Executed Trades
+
+![Trades](screenshots/price-trades.png)
+
+---
+
+## Drawdown Analysis
+
+![Drawdown](screenshots/drawdown.png)
+
+---
+
+## Monthly Returns Heatmap
+
+![Heatmap](screenshots/monthly-heatmap.png)
 
 ---
 
 # 🏗 Architecture
 
-SignalLab is built around a generic simulation engine.
+SignalLab follows a modular architecture where each component has a clearly defined responsibility.
 
 ```text
-Historical Market Data
-          │
-          ▼
- Strategy Generator
-          │
-          ▼
- Portfolio Positions
-(0 = Cash, 1 = Invested)
-          │
-          ▼
- Generic Trading Simulator
-          │
-          ▼
-Performance Metrics
-```
-
-Every strategy is responsible only for deciding **when to be invested**.
-
-The simulator handles:
-
-- Portfolio accounting
-- Transaction fees
-- Trade execution
-- Equity curve generation
-- Drawdown calculation
-- Performance statistics
-
-This architecture allows new strategies to be added without modifying the simulator.
-
----
-
-# 📂 Project Structure
-
-```text
-SignalLab/
-
-├── app.py
-├── market.py
-├── indicators.py
-├── optimizer.py
-├── walk_forward.py
-├── version.py
+app.py
 │
-├── engine/
-│   └── simulator.py
+├── analytics/
+│   ├── performance.py
+│   ├── drawdown.py
+│   ├── rolling.py
+│   └── monthly_returns.py
 │
 ├── strategies/
-│   ├── ma_crossover.py
-│   ├── rsi.py
-│   └── registry.py
+│
+├── simulator/
 │
 ├── ui/
-│   └── parameter_builder.py
+│   ├── charts.py
+│   ├── formatting.py
+│   ├── performance_dashboard.py
+│   └── performance_highlights.py
 │
-├── tests/
-│   └── test_simulator.py
-│
-├── data/
-│
-├── requirements.txt
-└── README.md
+└── tests/
 ```
 
 ---
 
-# 🚀 Installation
+# 🚀 Getting Started
 
 Clone the repository
 
 ```bash
-git clone <repository-url>
-
+git clone https://github.com/<your-username>/SignalLab.git
 cd SignalLab
 ```
 
 Create a virtual environment
 
 ```bash
-python3 -m venv .venv
+python -m venv .venv
 ```
 
 Activate it
 
-macOS / Linux
+**macOS / Linux**
 
 ```bash
 source .venv/bin/activate
 ```
 
+**Windows**
+
+```powershell
+.venv\Scripts\activate
+```
+
 Install dependencies
 
 ```bash
-python -m pip install --upgrade pip
-
 pip install -r requirements.txt
 ```
 
----
-
-# ▶ Running SignalLab
+Run SignalLab
 
 ```bash
-python -m streamlit run app.py
+streamlit run app.py
 ```
 
 ---
 
 # 🧪 Running Tests
 
+Run all tests
+
 ```bash
-python -m pytest -v
+pytest
 ```
 
----
+Run with verbose output
 
-# 📈 Included Strategies
-
-## Moving Average Crossover
-
-A classic trend-following strategy.
-
-Rules:
-
-- Buy when the fast moving average rises above the slow moving average.
-- Sell when the fast moving average falls below the slow moving average.
-
----
-
-## Relative Strength Index (RSI)
-
-A mean-reversion strategy.
-
-Rules:
-
-- Buy when RSI falls below the oversold threshold.
-- Sell when RSI rises above the overbought threshold.
-
----
-
-# 🔬 Research Philosophy
-
-SignalLab is designed to answer one question:
-
-> **"Does this trading idea actually work?"**
-
-Instead of assuming that a strategy is profitable, SignalLab allows strategies to be:
-
-- backtested
-- optimized
-- compared
-- validated using walk-forward testing
-
-before drawing conclusions.
-
----
-
-# ⚠ Current Limitations
-
-SignalLab currently does **not** model:
-
-- Bid-ask spreads
-- Slippage
-- Taxes
-- Partial fills
-- Market impact
-- Exchange outages
-- Liquidity constraints
-- Portfolio diversification
-- Short selling
-
-Historical performance should never be interpreted as evidence of future profitability.
+```bash
+pytest -v
+```
 
 ---
 
 # 🛣 Roadmap
 
-## Version 0.7
+### ✅ Completed
 
-- Automatic strategy parameter interface
-- Generic strategy optimizer
-- Generic walk-forward framework
+- Modular strategy framework
+- Generic backtesting engine
+- Strategy registry
+- Walk-forward validation
+- Performance dashboard
+- Strategy comparison
+- Drawdown analytics
+- Rolling Sharpe Ratio
+- Monthly Returns Heatmap
+- Performance highlights
+- Reusable UI formatting
 
-## Version 0.8
+### 🔮 Future
 
-- MACD strategy
-- Bollinger Bands strategy
-- Additional performance metrics
-
-## Version 0.9
-
-- AI-assisted strategies
+- Multi-asset support
+- Additional strategy library
 - Portfolio optimization
-- Multiple asset support
-
-## Version 1.0
-
-- Stable public release
-- Plugin architecture
-- Documentation
-- Paper trading
+- Monte Carlo analysis
+- Position sizing models
+- Performance report export
+- Interactive strategy builder
 
 ---
 
-# 🛠 Built With
+# 🤝 Contributing
 
-- Python
-- Streamlit
-- Pandas
-- Plotly
-- TA
-- Pytest
+Ideas, suggestions and pull requests are always welcome.
 
 ---
 
 # 📄 License
 
-A license has not yet been selected.
-
----
-
-# ❤️ Acknowledgements
-
-SignalLab has been developed as a long-term learning project exploring software engineering, quantitative finance, and algorithmic trading.
-
-The focus of the project is not only on developing trading strategies, but also on designing clean, modular, and maintainable software.
+MIT License

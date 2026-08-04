@@ -30,26 +30,36 @@ from ui.performance_highlights import (
 from analytics.drawdown import (
     calculate_drawdown_series,
 )
-
+from analytics.rolling import calculate_rolling_sharpe
+from analytics.monthly_returns import (
+    calculate_monthly_returns,
+)
 from ui.charts import (
     plot_drawdown,
     plot_indicator_panel,
     plot_price_with_trades,
+    plot_rolling_sharpe,
+    plot_monthly_returns_heatmap,
+)
+from ui.formatting import (
+    BACKTEST_FORMATS,
+    TRADE_HISTORY_FORMATS,
+    format_dataframe,
 )
 
 
 
-st.set_page_config(
-    page_title="Crypto Trading Assistant",
-    page_icon="📈",
-    layout="wide",
-)
+st.title("📊 SignalLab")
 
-st.title("📈 Crypto Trading Assistant")
 st.caption(
-    "Educational market analysis and backtesting — "
-    "not financial advice."
+    "A modular laboratory for quantitative trading research."
 )
+
+st.markdown(
+    "**Develop • Backtest • Compare • Analyze**"
+)
+
+st.divider()
 
 prices = get_prices()
 
@@ -65,19 +75,19 @@ else:
     with col1:
         st.metric(
             "Bitcoin",
-            f"€{prices['bitcoin']['eur']:,.0f}",
+            f"€{prices['bitcoin']['eur']:,.2f}",
         )
 
     with col2:
         st.metric(
             "Ethereum",
-            f"€{prices['ethereum']['eur']:,.0f}",
+            f"€{prices['ethereum']['eur']:,.2f}",
         )
 
     with col3:
         st.metric(
             "Solana",
-            f"€{prices['solana']['eur']:,.0f}",
+            f"€{prices['solana']['eur']:,.2f}",
         )
 
 st.divider()
@@ -90,11 +100,11 @@ st.divider()
     comparison_tab,
 ) = st.tabs(
     [
-        "Analysis",
-        "Backtest",
-        "Strategy Lab",
-        "Walk-Forward",
-        "Strategy Comparison",
+        "📈 Analysis",
+        "💰 Backtest",
+        "🧪 Strategy Lab",
+        "🔄 Walk-Forward",
+        "📊 Strategy Research",
     ]
 )
 
@@ -229,8 +239,8 @@ with backtest_tab:
         )
 
         st.metric(
-            "Difference",
-            f"{difference:+.1f} percentage points",
+            "Excess return",
+            f"{difference:+.1f} pp",
         )
 
     performance_chart = (
@@ -287,7 +297,10 @@ with backtest_tab:
         )
 
         st.dataframe(
-            display_trades,
+            format_dataframe(
+                display_trades,
+                BACKTEST_FORMATS,
+            ),
             hide_index=True,
             use_container_width=True,
         )
@@ -519,7 +532,10 @@ with strategy_lab_tab:
             )
 
             st.dataframe(
-                display_results,
+                format_dataframe(
+                    result.trades,
+                    TRADE_HISTORY_FORMATS,
+                ),
                 hide_index=True,
                 use_container_width=True,
             )
@@ -863,7 +879,7 @@ with walk_forward_tab:
                 st.exception(error)
 
 with comparison_tab:
-    st.subheader("Strategy Comparison")
+    st.subheader("Strategy Research")
 
     st.write(
         """
@@ -1269,7 +1285,7 @@ with comparison_tab:
                                 detail1.metric(
                                     "Return",
                                     (
-                                        f"{result.strategy_return}%"
+                                        f"{result.strategy_return:.2f}%"
                                     ),
                                 )
 
@@ -1281,7 +1297,7 @@ with comparison_tab:
                                 detail3.metric(
                                     "Win rate",
                                     (
-                                        f"{result.win_rate}%"
+                                        f"{result.win_rate:.1f}%"
                                     ),
                                 )
 
@@ -1336,6 +1352,45 @@ with comparison_tab:
                                         use_container_width=True,
                                     )
 
+                                    rolling_sharpe_data = calculate_rolling_sharpe(
+                                        history=result.history,
+                                        window=30,
+                                    )
+
+                                    rolling_sharpe_figure = plot_rolling_sharpe(
+                                        rolling_data=rolling_sharpe_data,
+                                        title=(
+                                            f"{strategy.name} — "
+                                            "30-day rolling Sharpe ratio"
+                                        ),
+                                    )
+
+                                    st.plotly_chart(
+                                        rolling_sharpe_figure,
+                                        use_container_width=True,
+                                    )
+
+                                    monthly_returns = (
+                                        calculate_monthly_returns(
+                                            result.history
+                                        )
+                                    )
+
+                                    monthly_heatmap = (
+                                        plot_monthly_returns_heatmap(
+                                            monthly_returns,
+                                            title=(
+                                                f"{strategy.name} — "
+                                                "Monthly Returns"
+                                            ),
+                                        )
+                                    )
+
+                                    st.plotly_chart(
+                                        monthly_heatmap,
+                                        use_container_width=True,
+                                    )
+
                                 if result.trades.empty:
                                     st.info(
                                         "This strategy made "
@@ -1344,10 +1399,13 @@ with comparison_tab:
 
                                 else:
                                     st.dataframe(
-                                        result.trades,
+                                        format_dataframe(
+                                            result.trades,
+                                            BACKTEST_FORMATS,
+                                        ),
                                         hide_index=True,
                                         use_container_width=True,
-                                    )
+)
 
                     st.warning(
                         "This comparison uses each strategy's default "

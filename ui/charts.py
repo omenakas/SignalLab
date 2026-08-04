@@ -3,6 +3,7 @@ from strategies.registry import ChartPanel
 
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 
 
 def plot_price_with_trades(
@@ -400,6 +401,149 @@ def plot_drawdown(
             "t": 60,
             "b": 40,
         },
+    )
+
+    return figure
+
+def plot_rolling_sharpe(
+    rolling_data: pd.DataFrame,
+    title: str = "Rolling Sharpe ratio",
+) -> go.Figure:
+    """
+    Plot annualized rolling Sharpe ratio.
+    """
+
+    required_columns = {
+        "date",
+        "rolling_sharpe",
+    }
+
+    missing_columns = (
+        required_columns - set(rolling_data.columns)
+    )
+
+    if missing_columns:
+        raise ValueError(
+            "Rolling Sharpe data is missing columns: "
+            f"{sorted(missing_columns)}"
+        )
+
+    data = rolling_data.copy()
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    data["rolling_sharpe"] = pd.to_numeric(
+        data["rolling_sharpe"],
+        errors="coerce",
+    )
+
+    data = data.dropna(
+        subset=[
+            "date",
+            "rolling_sharpe",
+        ]
+    )
+
+    if data.empty:
+        raise ValueError(
+            "No valid rolling Sharpe data remains."
+        )
+
+    figure = go.Figure()
+
+    figure.add_trace(
+        go.Scatter(
+            x=data["date"],
+            y=data["rolling_sharpe"],
+            mode="lines",
+            name="Rolling Sharpe",
+            hovertemplate=(
+                "%{x|%Y-%m-%d}<br>"
+                "Sharpe: %{y:.2f}"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    figure.add_hline(
+        y=0,
+        line_dash="dash",
+    )
+
+    figure.add_hline(
+        y=1,
+        line_dash="dot",
+    )
+
+    figure.update_layout(
+        title=title,
+        xaxis_title="Date",
+        yaxis_title="Sharpe ratio",
+        hovermode="x unified",
+        margin={
+            "l": 40,
+            "r": 20,
+            "t": 60,
+            "b": 40,
+        },
+    )
+
+    return figure
+
+def plot_monthly_returns_heatmap(
+    monthly_returns: pd.DataFrame,
+    title: str = (
+        "Monthly Returns Heatmap"
+    ),
+) -> go.Figure:
+    """
+    Plot monthly returns as a heatmap.
+    """
+
+    month_order = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
+
+    heatmap = (
+        monthly_returns
+        .pivot(
+            index="year",
+            columns="month",
+            values="monthly_return",
+        )
+        .reindex(
+            columns=month_order
+        )
+    )
+
+    figure = px.imshow(
+        heatmap,
+        text_auto=".1f",
+        aspect="auto",
+        color_continuous_scale="RdYlGn",
+        labels={
+            "x": "Month",
+            "y": "Year",
+            "color": "Return (%)",
+        },
+    )
+
+    figure.update_layout(
+        title=title,
     )
 
     return figure
