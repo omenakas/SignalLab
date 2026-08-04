@@ -157,11 +157,11 @@ def render_performance_dashboard(
 
     with detail3:
         detail3.metric(
-            "💹 Trades",
-            int(best_result["Completed trades"]),
+            "🌊 Volatility",
+            f"{best_result['Volatility (%)']:.2f}%",
         )
         st.caption(
-            "Completed buy/sell transactions."
+            "Annualized variability of portfolio returns."
         )
 
     with detail4:

@@ -12,6 +12,7 @@ class PerformanceMetrics:
     sortino_ratio: float
     cagr: float
     calmar_ratio: float
+    volatility: float
 
     def as_dict(self) -> dict[str, float]:
         return {
@@ -19,6 +20,7 @@ class PerformanceMetrics:
             "Sortino ratio": self.sortino_ratio,
             "CAGR (%)": self.cagr,
             "Calmar ratio": self.calmar_ratio,
+            "Volatility (%)": self.volatility,
         }
     
 def calculate_performance_metrics(
@@ -86,6 +88,7 @@ def calculate_performance_metrics(
             sortino_ratio=0.0,
             cagr=0.0,
             calmar_ratio=0.0,
+            volatility=0.0,
         )
 
     values = data["strategy_value"]
@@ -124,6 +127,23 @@ def calculate_performance_metrics(
         .dropna()
     )
 
+    if returns.empty:
+        volatility = 0.0
+
+    else:
+        daily_volatility = float(
+            returns.std(ddof=1)
+        )
+
+        volatility = (
+            daily_volatility
+            * np.sqrt(365)
+            * 100
+        )
+
+        if not np.isfinite(volatility):
+            volatility = 0.0
+
     daily_risk_free_rate = (
                 (1 + risk_free_rate)
                 ** (1 / 365)
@@ -161,20 +181,20 @@ def calculate_performance_metrics(
             returns - daily_risk_free_rate
         )
 
-        volatility = float(
+        return_volatility = float(
             returns.std(ddof=1)
         )
 
         if (
-            not np.isfinite(volatility)
-            or volatility == 0
+            not np.isfinite(return_volatility)
+            or return_volatility == 0
         ):
             sharpe = 0.0
 
         else:
             sharpe = (
                 float(excess_returns.mean())
-                / volatility
+                / return_volatility
                 * np.sqrt(365)
             )
 
@@ -208,10 +228,12 @@ def calculate_performance_metrics(
 
             if not np.isfinite(sortino):
                 sortino = 0.0
-    
+        
     return PerformanceMetrics(
         sharpe_ratio=float(sharpe),
         sortino_ratio=float(sortino),
         cagr=float(cagr),
         calmar_ratio=float(calmar),
+        volatility=float(volatility),
     )
+

@@ -42,6 +42,7 @@ def test_metrics_return_zero_for_insufficient_history():
         cagr=0.0,
         sortino_ratio=0.0,
         calmar_ratio=0.0,
+        volatility=0.0,
     )
 
 
@@ -120,6 +121,7 @@ def test_performance_metrics_as_dict():
         sortino_ratio=1.75,
         cagr=18.5,
         calmar_ratio=0.8,
+        volatility=32.4,
     )
 
     assert metrics.as_dict() == {
@@ -127,15 +129,17 @@ def test_performance_metrics_as_dict():
         "Sortino ratio": 1.75,
         "CAGR (%)": 18.5,
         "Calmar ratio": 0.8,
+        "Volatility (%)": 32.4,
     }
 
 
 def test_performance_metrics_as_dict_returns_new_dictionary():
     metrics = PerformanceMetrics(
         sharpe_ratio=1.25,
-        cagr=18.5,
         sortino_ratio=1.75,
+        cagr=18.5,
         calmar_ratio=0.8,
+        volatility=32.4,
     )
 
     first = metrics.as_dict()

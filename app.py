@@ -1168,6 +1168,7 @@ with comparison_tab:
                         "Calmar ratio",
                         "Max drawdown (%)",
                         "Win rate (%)",
+                        "Volatility (%)",
                     ]
 
                     display_results[numeric_columns] = (
@@ -1405,7 +1406,7 @@ with comparison_tab:
                                         ),
                                         hide_index=True,
                                         use_container_width=True,
-)
+                                    )
 
                     st.warning(
                         "This comparison uses each strategy's default "
@@ -1413,3 +1414,4 @@ with comparison_tab:
                         "Ranking first in this table does not establish "
                         "future profitability."
                     )
+                    
