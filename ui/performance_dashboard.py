@@ -92,49 +92,86 @@ def render_performance_dashboard(
 
     st.markdown("## 📊 Performance Dashboard")
 
+    st.caption(
+        "Historical analysis only. "
+        "Past performance does not guarantee future results."
+    )
+
     summary1, summary2, summary3, summary4 = st.columns(4)
 
-    summary1.metric(
-        "🏆 Best strategy",
-        best_result["Strategy"],
-    )
+    with summary1:
+        summary1.metric(
+            "🏆 Best strategy",
+            best_result["Strategy"],
+        )
+        st.caption(
+            "Highest-ranked strategy in this comparison."
+        )
 
-    summary2.metric(
-        "📈 Return",
-        f"{best_result['Return (%)']:+.2f}%",
-    )
+    with summary2:
+        summary2.metric(
+            "📈 Return",
+            f"{best_result['Return (%)']:+.2f}%",
+        )
+        st.caption(
+            "Total strategy return over the tested period."
+        )   
+    
+    with summary3:
+        summary3.metric(
+            "⚖ Sharpe",
+            f"{best_result['Sharpe ratio']:.2f}",
+        )
+        st.caption(
+            "Risk-adjusted return using total volatility."
+        )
 
-    summary3.metric(
-        "⚖ Sharpe",
-        f"{best_result['Sharpe ratio']:.2f}",
-    )
-
-    summary4.metric(
-        "📉 Calmar",
-        f"{best_result['Calmar ratio']:.2f}",
-    )
+    with summary4:
+        summary4.metric(
+            "📉 Calmar",
+            f"{best_result['Calmar ratio']:.2f}",
+        )
+        st.caption(
+            "Annualized return relative to maximum drawdown."
+        )
 
     detail1, detail2, detail3, detail4 = st.columns(4)
 
-    detail1.metric(
-        "📅 CAGR",
-        f"{best_result['CAGR (%)']:+.2f}%",
-    )
+    with detail1:
+        detail1.metric(
+            "📅 CAGR",
+            f"{best_result['CAGR (%)']:+.2f}%",
+        )
+        st.caption(
+            "Annualized compound growth rate."
+        )
 
-    detail2.metric(
-        "🛡 Sortino",
-        f"{best_result['Sortino ratio']:.2f}",
-    )
+    with detail2:
+        detail2.metric(
+            "🛡 Sortino",
+            f"{best_result['Sortino ratio']:.2f}",
+        )
+        st.caption(
+            "Risk-adjusted return using downside volatility."
+        )
 
-    detail3.metric(
-        "💹 Trades",
-        int(best_result["Completed trades"]),
-    )
+    with detail3:
+        detail3.metric(
+            "💹 Trades",
+            int(best_result["Completed trades"]),
+        )
+        st.caption(
+            "Completed buy/sell transactions."
+        )
 
-    detail4.metric(
-        "🎯 Win rate",
-        f"{best_result['Win rate (%)']:.1f}%",
-    )
+    with detail4:
+        detail4.metric(
+            "🎯 Win rate",
+            f"{best_result['Win rate (%)']:.1f}%",
+        )
+        st.caption(
+            "Percentage of profitable completed trades."
+        )
 
     st.markdown("### Performance signals")
 

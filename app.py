@@ -24,6 +24,18 @@ from analytics.performance import calculate_performance_metrics
 from ui.performance_dashboard import (
     render_performance_dashboard,
 )
+from ui.performance_highlights import (
+    render_performance_highlights,
+)
+from analytics.drawdown import (
+    calculate_drawdown_series,
+)
+
+from ui.charts import (
+    plot_drawdown,
+    plot_indicator_panel,
+    plot_price_with_trades,
+)
 
 
 
@@ -1121,6 +1133,9 @@ with comparison_tab:
                     render_performance_dashboard(
                         best_result=best_result,
                     )
+                    render_performance_highlights(
+                        results_df,
+                    )
 
                     
 
@@ -1305,6 +1320,19 @@ with comparison_tab:
 
                                     st.plotly_chart(
                                         indicator_figure,
+                                        use_container_width=True,
+                                    )
+                                    drawdown_data = calculate_drawdown_series(
+                                        result.history
+                                    )
+
+                                    drawdown_figure = plot_drawdown(
+                                        drawdown_data=drawdown_data,
+                                        title=f"{strategy.name} — drawdown",
+                                    )
+
+                                    st.plotly_chart(
+                                        drawdown_figure,
                                         use_container_width=True,
                                     )
 

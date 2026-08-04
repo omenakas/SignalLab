@@ -322,3 +322,84 @@ def plot_indicator_panel(
     )
 
     return figure
+
+def plot_drawdown(
+    drawdown_data: pd.DataFrame,
+    title: str = "Drawdown",
+) -> go.Figure:
+    """
+    Plot portfolio drawdown through time.
+    """
+
+    required_columns = {
+        "date",
+        "drawdown_pct",
+    }
+
+    missing_columns = (
+        required_columns - set(drawdown_data.columns)
+    )
+
+    if missing_columns:
+        raise ValueError(
+            "Drawdown data is missing columns: "
+            f"{sorted(missing_columns)}"
+        )
+
+    data = drawdown_data.copy()
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    data["drawdown_pct"] = pd.to_numeric(
+        data["drawdown_pct"],
+        errors="coerce",
+    )
+
+    data = data.dropna(
+        subset=["date", "drawdown_pct"]
+    )
+
+    if data.empty:
+        raise ValueError(
+            "No valid drawdown data remains."
+        )
+
+    figure = go.Figure()
+
+    figure.add_trace(
+        go.Scatter(
+            x=data["date"],
+            y=data["drawdown_pct"],
+            mode="lines",
+            name="Drawdown",
+            fill="tozeroy",
+            hovertemplate=(
+                "%{x|%Y-%m-%d}<br>"
+                "Drawdown: %{y:.2f}%"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    figure.add_hline(
+        y=0,
+        line_dash="dash",
+    )
+
+    figure.update_layout(
+        title=title,
+        xaxis_title="Date",
+        yaxis_title="Drawdown (%)",
+        hovermode="x unified",
+        margin={
+            "l": 40,
+            "r": 20,
+            "t": 60,
+            "b": 40,
+        },
+    )
+
+    return figure
