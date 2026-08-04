@@ -1048,6 +1048,7 @@ with comparison_tab:
                                         result.excess_return
                                     ),
                                     "Sharpe ratio": performance_metrics.sharpe_ratio,
+                                    "CAGR (%)": performance_metrics.cagr,
                                     "Max drawdown (%)": (
                                         result.max_drawdown
                                     ),
@@ -1125,22 +1126,18 @@ with comparison_tab:
                     )
 
                     summary2.metric(
-                        "Best return",
-                        (
-                            f"{best_result['Return (%)']:+.2f}%"
-                        ),
+                        "Return",
+                        f"{best_result['Return (%)']:+.2f}%",
                     )
 
                     summary3.metric(
-                        "Excess vs hold",
-                        (
-                            f"{best_result['Excess return (pp)']} pp"
-                        ),
+                        "Sharpe",
+                        f"{best_result['Sharpe ratio']:.2f}",
                     )
 
                     summary4.metric(
-                        "Sharpe ratio",
-                        f"{best_result['Sharpe ratio']:.2f}",
+                        "CAGR",
+                        f"{best_result['CAGR (%)']:+.2f}%",
                     )
 
                     display_results = results_df.copy()
@@ -1151,6 +1148,7 @@ with comparison_tab:
                         "Buy & hold (%)",
                         "Excess return (pp)",
                         "Sharpe ratio",
+                        "CAGR (%)",
                         "Max drawdown (%)",
                         "Win rate (%)",
                     ]

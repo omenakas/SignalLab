@@ -13,6 +13,7 @@ class PerformanceMetrics:
     """
 
     sharpe_ratio: float
+    cagr: float
 
 def calculate_performance_metrics(
     history: pd.DataFrame,
@@ -25,52 +26,127 @@ def calculate_performance_metrics(
     Parameters
     ----------
     history
-        Simulator history dataframe.
+        Simulator history dataframe containing:
+        - date
+        - strategy_value
 
     risk_free_rate
         Annual risk-free rate expressed as a decimal.
-        Default is 0.0.
     """
 
     required_columns = {
+        "date",
         "strategy_value",
     }
 
-    missing = required_columns - set(history.columns)
-
-    if missing:
-        raise ValueError(
-            "History is missing columns: "
-            f"{sorted(missing)}"
-        )
-
-    values = (
-        history["strategy_value"]
-        .astype(float)
-        .copy()
+    missing_columns = (
+        required_columns - set(history.columns)
     )
 
-    returns = values.pct_change().dropna()
-
-    if returns.empty:
-        return PerformanceMetrics(
-            sharpe_ratio=0.0,
+    if missing_columns:
+        raise ValueError(
+            "History is missing columns: "
+            f"{sorted(missing_columns)}"
         )
 
-    volatility = returns.std()
+    data = history[
+        ["date", "strategy_value"]
+    ].copy()
 
-    if volatility == 0:
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    data["strategy_value"] = pd.to_numeric(
+        data["strategy_value"],
+        errors="coerce",
+    )
+
+    data = (
+        data
+        .dropna(subset=["date", "strategy_value"])
+        .sort_values("date")
+        .drop_duplicates(
+            subset=["date"],
+            keep="last",
+        )
+        .reset_index(drop=True)
+    )
+
+    if len(data) < 2:
+        return PerformanceMetrics(
+            sharpe_ratio=0.0,
+            cagr=0.0,
+        )
+
+    values = data["strategy_value"]
+
+    start_date = data["date"].iloc[0]
+    end_date = data["date"].iloc[-1]
+
+    elapsed_days = (
+        end_date - start_date
+    ).total_seconds() / 86_400
+
+    years = elapsed_days / 365.25
+
+    initial_value = float(values.iloc[0])
+    final_value = float(values.iloc[-1])
+
+    if (
+        years <= 0
+        or initial_value <= 0
+        or final_value <= 0
+    ):
+        cagr = 0.0
+
+    else:
+        cagr = (
+            (
+                final_value / initial_value
+            )
+            ** (1 / years)
+            - 1
+        ) * 100
+
+    returns = (
+        values
+        .pct_change(fill_method=None)
+        .dropna()
+    )
+
+    if returns.empty:
         sharpe = 0.0
 
     else:
-        sharpe = (
-            (
-                returns.mean()
-                - risk_free_rate / 365
+        volatility = float(
+            returns.std(ddof=1)
+        )
+
+        if not np.isfinite(volatility) or volatility == 0:
+            sharpe = 0.0
+
+        else:
+            daily_risk_free_rate = (
+                (1 + risk_free_rate)
+                ** (1 / 365)
+                - 1
             )
-            / volatility
-        ) * np.sqrt(365)
+
+            sharpe = (
+                (
+                    float(returns.mean())
+                    - daily_risk_free_rate
+                )
+                / volatility
+                * np.sqrt(365)
+            )
+
+            if not np.isfinite(sharpe):
+                sharpe = 0.0
 
     return PerformanceMetrics(
         sharpe_ratio=float(sharpe),
+        cagr=float(cagr),
     )
