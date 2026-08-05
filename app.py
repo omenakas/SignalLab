@@ -46,6 +46,9 @@ from ui.formatting import (
     TRADE_HISTORY_FORMATS,
     format_dataframe,
 )
+from analytics.trade_metrics import (
+    calculate_trade_metrics,
+)
 
 
 
@@ -210,6 +213,7 @@ with backtest_tab:
         performance_metrics = calculate_performance_metrics(
             history=result.history,
         )
+        
         
 
     except ValueError as error:
@@ -1055,6 +1059,10 @@ with comparison_tab:
                             performance_metrics = calculate_performance_metrics(
                                 history=result.history,
                             )
+
+                            trade_metrics = calculate_trade_metrics(
+                                trades=result.trades,
+                            )
                             
 
                             simulations[strategy_name] = {
@@ -1079,6 +1087,7 @@ with comparison_tab:
                                         result.excess_return
                                     ),
                                     **performance_metrics.as_dict(),
+                                    **trade_metrics.as_dict(),
                                     "Max drawdown (%)": (
                                         result.max_drawdown
                                     ),
@@ -1166,15 +1175,30 @@ with comparison_tab:
                         "Sortino ratio",
                         "CAGR (%)",
                         "Calmar ratio",
+                        "Volatility (%)",
                         "Max drawdown (%)",
                         "Win rate (%)",
-                        "Volatility (%)",
                     ]
 
-                    display_results[numeric_columns] = (
-                        display_results[
-                            numeric_columns
-                        ].round(2)
+                    for column in numeric_columns:
+                        if column in display_results.columns:
+                            display_results[column] = (
+                                pd.to_numeric(
+                                    display_results[column],
+                                    errors="coerce",
+                                )
+                                .round(2)
+                            )
+
+                    display_results["Profit factor"] = (
+                        display_results["Profit factor"]
+                        .map(
+                            lambda value: (
+                                "∞"
+                                if value == float("inf")
+                                else f"{float(value):.2f}"
+                            )
+                        )
                     )
 
                     st.dataframe(
