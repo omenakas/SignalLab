@@ -931,16 +931,7 @@ with comparison_tab:
         key="comparison_show_details",
     )
 
-    if selected_strategy_names:
-        st.markdown("### Default parameters")
-
-        for strategy_name in selected_strategy_names:
-            strategy = get_strategy(strategy_name)
-
-            st.caption(
-                f"**{strategy.name}:** "
-                f"{strategy.default_parameters}"
-            )
+    
     st.markdown("### Strategy parameters")
 
     comparison_parameters = {}
@@ -954,6 +945,9 @@ with comparison_tab:
             f"{strategy_name} parameters",
             expanded=False,
         ):
+            st.caption(
+                strategy.description
+            )
             comparison_parameters[strategy_name] = (
                 build_parameter_inputs(
                     strategy=strategy,

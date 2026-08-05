@@ -6,6 +6,9 @@ import streamlit as st
 def _calculate_score(
     best_result: pd.Series,
 ) -> int:
+    completed_trades = int(
+        best_result["Completed trades"]
+    )   
     """
     Calculate a transparent strategy score from 0 to 10.
     """
@@ -37,13 +40,26 @@ def _calculate_score(
     elif sharpe >= 0.5:
         score += 1
 
-    if profit_factor >= 2.0:
-        score += 2
-    elif profit_factor >= 1.0:
-        score += 1
+    if completed_trades >= 5:
 
-    if expectancy > 0:
-        score += 2
+        if profit_factor >= 2:
+            score += 2
+
+        elif profit_factor >= 1:
+            score += 1
+
+    if completed_trades >= 5:
+
+        if expectancy > 0:
+            score += 2
+            
+    if completed_trades < 5:
+
+        st.warning(
+            "Trade-quality metrics are based on fewer than "
+            "five completed trades and should be interpreted "
+            "with caution."
+        )
 
     if calmar >= 1.0:
         score += 2
@@ -92,23 +108,6 @@ def render_strategy_report_card(
         "strategy using transparent scoring rules."
     )
 
-    print(
-        "Report card strategy:",
-        best_result["Strategy"],
-    )
-
-    print(
-        best_result[
-            [
-                "Sharpe ratio",
-                "Profit factor",
-                "Expectancy (€)",
-                "Calmar ratio",
-                "Volatility (%)",
-            ]
-        ]
-    )
-
     score = _calculate_score(
         best_result
     )
@@ -117,6 +116,32 @@ def render_strategy_report_card(
         "Overall Rating",
         _rating(score),
     )
+
+    st.caption(
+        f"Transparent score: {score}/10"
+    )
+
+    with st.expander(
+        "How is this rating calculated?"
+    ):
+        st.markdown(
+            """
+            The overall score is calculated using transparent
+            rule-based criteria.
+
+            **Maximum score: 10**
+
+            - Sharpe Ratio (0–2 points)
+            - Profit Factor (0–2 points)
+            - Positive Expectancy (2 points)
+            - Calmar Ratio (0–2 points)
+            - Annualized Volatility (0–2 points)
+
+            The Report Card summarizes historical
+            characteristics only and should not be interpreted
+            as an investment recommendation.
+            """
+        )
 
     sharpe = float(best_result["Sharpe ratio"])
     profit_factor = float(best_result["Profit factor"])
