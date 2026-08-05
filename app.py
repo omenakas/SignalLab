@@ -27,6 +27,9 @@ from ui.performance_dashboard import (
 from ui.performance_highlights import (
     render_performance_highlights,
 )
+from ui.strategy_report_card import (
+    render_strategy_report_card,
+)
 from analytics.drawdown import (
     calculate_drawdown_series,
 )
@@ -1063,18 +1066,7 @@ with comparison_tab:
                             trade_metrics = calculate_trade_metrics(
                                 trades=result.trades,
                             )
-
-                            print(
-                                strategy_name,
-                                result.trades[
-                                    [
-                                        "action",
-                                        "profit",
-                                    ]
-                                ],
-                            )
                             
-
                             simulations[strategy_name] = {
                                 "strategy": strategy,
                                 "positions": common_positions,
@@ -1170,6 +1162,9 @@ with comparison_tab:
                     )
                     render_performance_highlights(
                         results_df,
+                    )
+                    render_strategy_report_card(
+                        best_result=best_result,
                     )
 
                     
