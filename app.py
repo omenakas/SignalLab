@@ -306,7 +306,7 @@ with backtest_tab:
                 BACKTEST_FORMATS,
             ),
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
     with st.expander("How this backtest works"):
@@ -541,7 +541,7 @@ with strategy_lab_tab:
                     TRADE_HISTORY_FORMATS,
                 ),
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
 
             parameter_names = [
@@ -595,7 +595,7 @@ with strategy_lab_tab:
 
                 st.plotly_chart(
                     figure,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
             else:
@@ -856,7 +856,7 @@ with walk_forward_tab:
                 ):
                     st.dataframe(
                         wf_result.optimization_results,
-                        use_container_width=True,
+                        width="stretch",
                     )
 
                 with st.expander("Show unseen-period trade log"):
@@ -868,7 +868,7 @@ with walk_forward_tab:
                     else:
                         st.dataframe(
                             wf_result.test_trade_log,
-                            use_container_width=True,
+                            width="stretch",
                         )
 
                 st.warning(
@@ -1214,7 +1214,7 @@ with comparison_tab:
                     st.dataframe(
                         display_results,
                         hide_index=True,
-                        use_container_width=True,
+                        width="stretch",
                     )
 
                     st.markdown(
@@ -1262,7 +1262,7 @@ with comparison_tab:
 
                     st.line_chart(
                         equity_df,
-                        use_container_width=True,
+                        width="stretch",
                     )
 
                     st.markdown(
@@ -1281,7 +1281,7 @@ with comparison_tab:
 
                     st.bar_chart(
                         comparison_chart_data,
-                        use_container_width=True,
+                        width="stretch",
                     )
 
                     if show_comparison_details:
@@ -1354,7 +1354,7 @@ with comparison_tab:
 
                                 st.plotly_chart(
                                     trade_figure,
-                                    use_container_width=True,
+                                    width="stretch",
                                 )
 
                                 for panel in (
@@ -1371,7 +1371,7 @@ with comparison_tab:
 
                                     st.plotly_chart(
                                         indicator_figure,
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
                                     drawdown_data = calculate_drawdown_series(
                                         result.history
@@ -1384,7 +1384,7 @@ with comparison_tab:
 
                                     st.plotly_chart(
                                         drawdown_figure,
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
 
                                     rolling_sharpe_data = calculate_rolling_sharpe(
@@ -1402,7 +1402,7 @@ with comparison_tab:
 
                                     st.plotly_chart(
                                         rolling_sharpe_figure,
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
 
                                     monthly_returns = (
@@ -1423,7 +1423,7 @@ with comparison_tab:
 
                                     st.plotly_chart(
                                         monthly_heatmap,
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
 
                                 if result.trades.empty:
@@ -1439,7 +1439,7 @@ with comparison_tab:
                                             BACKTEST_FORMATS,
                                         ),
                                         hide_index=True,
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
 
                     st.warning(
