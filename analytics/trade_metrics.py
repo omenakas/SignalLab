@@ -13,14 +13,12 @@ class TradeMetrics:
     """
 
     profit_factor: float
+    expectancy: float
 
     def as_dict(self) -> dict[str, float]:
-        """
-        Return display-ready metric names and values.
-        """
-
         return {
             "Profit factor": self.profit_factor,
+            "Expectancy (€)": self.expectancy,
         }
 
 
@@ -38,7 +36,19 @@ def calculate_trade_metrics(
     Rows without a realized profit, such as entry transactions,
     do not affect the calculation.
     """
+    required_columns = {
+        "action",
+        "profit",
+        }
 
+    missing_columns = required_columns - set(trades.columns)
+
+    if missing_columns:
+        raise ValueError(
+            "Trades dataframe is missing columns: "
+            f"{sorted(missing_columns)}"
+        )
+    
     if trades is None:
         raise ValueError(
             "Trades dataframe cannot be None."
@@ -49,8 +59,15 @@ def calculate_trade_metrics(
             "Trades dataframe is missing the 'profit' column."
         )
 
+    completed_trades = trades.loc[
+        trades["action"]
+        .astype(str)
+        .str.upper()
+        .eq("SELL")
+    ].copy()
+
     profits = pd.to_numeric(
-        trades["profit"],
+        completed_trades["profit"],
         errors="coerce",
     ).dropna()
 
@@ -63,6 +80,13 @@ def calculate_trade_metrics(
             profits.loc[profits < 0].sum()
         )
     )
+
+    if profits.empty:
+        expectancy = 0.0
+    else:
+        expectancy = float(
+            profits.mean()
+        )
 
     if gross_loss == 0:
         if gross_profit > 0:
@@ -80,4 +104,5 @@ def calculate_trade_metrics(
 
     return TradeMetrics(
         profit_factor=float(profit_factor),
+        expectancy=float(expectancy),
     )

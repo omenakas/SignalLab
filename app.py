@@ -1063,6 +1063,16 @@ with comparison_tab:
                             trade_metrics = calculate_trade_metrics(
                                 trades=result.trades,
                             )
+
+                            print(
+                                strategy_name,
+                                result.trades[
+                                    [
+                                        "action",
+                                        "profit",
+                                    ]
+                                ],
+                            )
                             
 
                             simulations[strategy_name] = {
