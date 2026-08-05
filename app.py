@@ -941,6 +941,30 @@ with comparison_tab:
                 f"**{strategy.name}:** "
                 f"{strategy.default_parameters}"
             )
+    st.markdown("### Strategy parameters")
+
+    comparison_parameters = {}
+
+    for strategy_name in selected_strategy_names:
+        strategy = get_strategy(
+            strategy_name
+        )
+
+        with st.expander(
+            f"{strategy_name} parameters",
+            expanded=False,
+        ):
+            comparison_parameters[strategy_name] = (
+                build_parameter_inputs(
+                    strategy=strategy,
+                    key_prefix=(
+                        "comparison_"
+                        f"{strategy_name}"
+                        .lower()
+                        .replace(" ", "_")
+                    ),
+                )
+            )
 
     if st.button(
         "Compare strategies",
@@ -965,7 +989,9 @@ with comparison_tab:
                     try:
                         positions = strategy.generator(
                             df=history,
-                            **strategy.default_parameters,
+                            **comparison_parameters[
+                                strategy_name
+                            ],
                         )
 
                         if positions is None or positions.empty:
