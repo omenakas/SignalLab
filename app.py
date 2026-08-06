@@ -2,7 +2,6 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 
-from walk_forward import walk_forward_test
 from backtest import run_backtest
 from indicators import add_indicators
 from market import get_history, get_prices
@@ -11,6 +10,7 @@ from strategy import analyze_market
 from engine.simulator import run_position_backtest
 from strategies.registry import STRATEGIES, get_strategy
 from optimizer import optimize_strategy
+from walk_forward import generic_walk_forward_test
 
 from ui.parameter_builder import build_parameter_inputs
 from ui.charts import plot_price_with_trades
@@ -718,6 +718,19 @@ with walk_forward_tab:
         are then frozen and evaluated on the later, unseen period.
         """
     )
+    selected_walk_forward_name = st.selectbox(
+            "Strategy to test",
+            options=list(STRATEGIES.keys()),
+            key="walk_forward_strategy",
+        )
+
+    selected_walk_forward_strategy = get_strategy(
+        selected_walk_forward_name
+    )
+
+    st.caption(
+        selected_walk_forward_strategy.description
+    )
 
     walk_forward_objective = st.selectbox(
         "Optimization objective",
@@ -733,7 +746,7 @@ with walk_forward_tab:
         ]
     )
 
-    wf_settings1, wf_settings2, wf_settings3 = st.columns(3)
+    wf_settings1, wf_settings2 = st.columns(2)
 
     with wf_settings1:
         wf_capital = st.number_input(
@@ -772,65 +785,13 @@ with walk_forward_tab:
             step=1,
             key="wf_min_trades",
         )
+    
+    st.markdown("#### Parameter ranges")
 
-    with wf_settings3:
-        wf_fast_min = st.number_input(
-            "Fast MA minimum",
-            min_value=2,
-            max_value=200,
-            value=5,
-            step=1,
-            key="wf_fast_min",
-        )
-
-        wf_fast_max = st.number_input(
-            "Fast MA maximum",
-            min_value=2,
-            max_value=250,
-            value=40,
-            step=1,
-            key="wf_fast_max",
-        )
-
-        wf_fast_step = st.number_input(
-            "Fast MA step",
-            min_value=1,
-            max_value=50,
-            value=5,
-            step=1,
-            key="wf_fast_step",
-        )
-
-    wf_ranges1, wf_ranges2 = st.columns(2)
-
-    with wf_ranges1:
-        wf_slow_min = st.number_input(
-            "Slow MA minimum",
-            min_value=3,
-            max_value=300,
-            value=30,
-            step=1,
-            key="wf_slow_min",
-        )
-
-        wf_slow_max = st.number_input(
-            "Slow MA maximum",
-            min_value=5,
-            max_value=500,
-            value=150,
-            step=5,
-            key="wf_slow_max",
-        )
-
-    with wf_ranges2:
-        wf_slow_step = st.number_input(
-            "Slow MA step",
-            min_value=1,
-            max_value=100,
-            value=10,
-            step=1,
-            key="wf_slow_step",
-        )
+    parameter_grid = build_optimization_grid_inputs(
+        strategy=selected_walk_forward_strategy,
+        key_prefix="walk_forward",
+    )
 
     run_walk_forward = st.button(
         "Run Walk-Forward Test",
@@ -838,164 +799,154 @@ with walk_forward_tab:
         key="run_walk_forward",
     )
 
+    
     if run_walk_forward:
-        if wf_fast_min > wf_fast_max:
-            st.error(
-                "Fast MA minimum cannot be greater than its maximum."
+        try:
+            with st.spinner(
+                "Optimizing the training period and testing "
+                "the winner on unseen data..."
+            ):
+                wf_result = generic_walk_forward_test(
+                    df=history,
+                    strategy=selected_walk_forward_strategy,
+                    parameter_grid=parameter_grid,
+                    train_fraction=wf_train_percent / 100,
+                    initial_capital=wf_capital,
+                    fee_rate=wf_fee_percent / 100,
+                    min_trades=int(wf_min_trades),
+                    optimization_target=walk_forward_target,
+                )
+
+            st.success(
+                "Walk-forward test completed successfully."
             )
 
-        elif wf_slow_min > wf_slow_max:
-            st.error(
-                "Slow MA minimum cannot be greater than its maximum."
+            st.markdown("### Selected training-period strategy")
+
+            st.caption(
+                f"Parameters selected by: "
+                f"{walk_forward_objective}"
             )
 
-        else:
-            fast_values = range(
-                int(wf_fast_min),
-                int(wf_fast_max) + 1,
-                int(wf_fast_step),
+            formatted_best_parameters = " · ".join(
+                f"{parameter.label}: "
+                f"{wf_result.best_parameters[parameter.name]}"
+                for parameter in selected_walk_forward_strategy.parameters
+                if parameter.name in wf_result.best_parameters
             )
 
-            slow_values = range(
-                int(wf_slow_min),
-                int(wf_slow_max) + 1,
-                int(wf_slow_step),
+            st.markdown(
+                f"**Best parameters:** "
+                f"{formatted_best_parameters}"
             )
 
-            try:
-                with st.spinner(
-                    "Optimizing the training period and testing "
-                    "the winner on unseen data..."
-                ):
-                    wf_result = walk_forward_test(
-                        df=history,
-                        fast_values=fast_values,
-                        slow_values=slow_values,
-                        train_fraction=wf_train_percent / 100,
-                        initial_capital=wf_capital,
-                        fee_rate=wf_fee_percent / 100,
-                        min_trades=int(wf_min_trades),
-                        optimization_target=walk_forward_target,
-                    )
+            selection1, selection2 = st.columns(2)
 
-                st.success(
-                    "Walk-forward test completed successfully."
-                )
+            selection1.metric(
+                "Training return",
+                f"{wf_result.train_return_pct:.2f}%",
+            )
 
-                st.markdown("### Selected training-period strategy")
+            selection2.metric(
+                "Strategy",
+                wf_result.strategy_name,
+            )
 
-                st.caption(
-                    f"Parameters selected by: "
-                    f"{walk_forward_objective}"
-                )
+            st.markdown("### Unseen testing-period results")
 
-                selection1, selection2, selection3 = st.columns(3)
+            result1, result2, result3, result4 = st.columns(4)
 
-                selection1.metric(
-                    "Fast MA",
-                    wf_result.fast_ma,
-                )
+            result1.metric(
+                "Strategy return",
+                f"{wf_result.test_return_pct:.2f}%",
+            )
 
-                selection2.metric(
-                    "Slow MA",
-                    wf_result.slow_ma,
-                )
+            result2.metric(
+                "Buy & Hold",
+                f"{wf_result.test_buy_hold_return_pct:.2f}%",
+            )
 
-                selection3.metric(
-                    "Training return",
-                    f"{wf_result.train_return_pct:.2f}%",
-                )
+            result3.metric(
+                "Excess return",
+                f"{wf_result.test_excess_return_pct:.2f}%",
+            )
 
-                st.markdown("### Unseen testing-period results")
+            result4.metric(
+                "Maximum drawdown",
+                f"{wf_result.test_max_drawdown_pct:.2f}%",
+            )
 
-                result1, result2, result3, result4 = st.columns(4)
+            detail1, detail2, detail3, detail4 = st.columns(4)
 
-                result1.metric(
-                    "Strategy return",
-                    f"{wf_result.test_return_pct:.2f}%",
-                )
+            detail1.metric(
+                "Final strategy value",
+                f"€{wf_result.test_final_value:,.2f}",
+            )
 
-                result2.metric(
-                    "Buy & Hold",
-                    f"{wf_result.test_buy_hold_return_pct:.2f}%",
-                )
+            detail2.metric(
+                "Buy & Hold value",
+                f"€{wf_result.test_buy_hold_final_value:,.2f}",
+            )
 
-                result3.metric(
-                    "Excess return",
-                    f"{wf_result.test_excess_return_pct:.2f}%",
-                )
+            detail3.metric(
+                "Completed trades",
+                wf_result.test_trades,
+            )
 
-                result4.metric(
-                    "Maximum drawdown",
-                    f"{wf_result.test_max_drawdown_pct:.2f}%",
-                )
+            detail4.metric(
+                "Win rate",
+                f"{wf_result.test_win_rate_pct:.1f}%",
+            )
 
-                detail1, detail2, detail3, detail4 = st.columns(4)
-
-                detail1.metric(
-                    "Final strategy value",
-                    f"€{wf_result.test_final_value:,.2f}",
-                )
-
-                detail2.metric(
-                    "Buy & Hold value",
-                    f"€{wf_result.test_buy_hold_final_value:,.2f}",
-                )
-
-                detail3.metric(
-                    "Completed trades",
-                    wf_result.test_trades,
-                )
-
-                detail4.metric(
-                    "Win rate",
-                    f"{wf_result.test_win_rate_pct:.1f}%",
-                )
-
-                chart_data = wf_result.test_equity_curve[
-                    [
-                        "strategy_value",
-                        "buy_hold_value",
-                    ]
+            chart_data = wf_result.test_equity_curve[
+                [
+                    "strategy_value",
+                    "buy_hold_value",
                 ]
+            ]
 
-                st.line_chart(chart_data)
+            st.line_chart(chart_data)
 
-                st.caption(
-                    f"Training rows: {wf_result.train_rows} · "
-                    f"Testing rows: {wf_result.test_rows}"
+            st.caption(
+                f"Training rows: {wf_result.train_rows} · "
+                f"Testing rows: {wf_result.test_rows}"
+            )
+
+            with st.expander(
+                "Show training-period optimization results"
+            ):
+                st.dataframe(
+                    wf_result.optimization_results,
+                    width="stretch",
                 )
 
-                with st.expander(
-                    "Show training-period optimization results"
-                ):
+            with st.expander("Show unseen-period trade log"):
+                if wf_result.test_trade_log.empty:
+                    st.info(
+                        "The selected strategy made no completed "
+                        "trades during the testing period."
+                    )
+                else:
                     st.dataframe(
-                        wf_result.optimization_results,
+                        wf_result.test_trade_log,
                         width="stretch",
                     )
 
-                with st.expander("Show unseen-period trade log"):
-                    if wf_result.test_trade_log.empty:
-                        st.info(
-                            "The selected strategy made no completed "
-                            "trades during the testing period."
-                        )
-                    else:
-                        st.dataframe(
-                            wf_result.test_trade_log,
-                            width="stretch",
-                        )
+            st.warning(
+                "A single holdout test is more honest than "
+                "optimizing on all available data, but it is still "
+                "only one historical experiment. It does not "
+                "demonstrate that the strategy will work in the "
+                "future."
+            )
 
-                st.warning(
-                    "A single holdout test is more honest than "
-                    "optimizing on all available data, but it is still "
-                    "only one historical experiment. It does not "
-                    "demonstrate that the strategy will work in the "
-                    "future."
-                )
+        except ValueError as error:
+            st.warning(
+                str(error)
+            )
 
-            except Exception as error:
-                st.exception(error)
+        except Exception as error:
+            st.exception(error)
 
 with comparison_tab:
     st.subheader("Strategy Research")

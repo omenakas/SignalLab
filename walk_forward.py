@@ -5,7 +5,7 @@ import pandas as pd
 
 from engine.simulator import run_position_backtest
 from optimizer import optimize_strategy
-from strategies.registry import StrategyDefinition, get_strategy
+from strategies.registry import StrategyDefinition
 
 
 @dataclass
@@ -33,34 +33,6 @@ class GenericWalkForwardResult:
     test_equity_curve: pd.DataFrame
     test_trade_log: pd.DataFrame
 
-
-@dataclass
-class WalkForwardResult:
-    """
-    Compatibility result used by the existing MA Walk-Forward UI.
-    """
-
-    fast_ma: int
-    slow_ma: int
-
-    split_index: int
-    train_rows: int
-    test_rows: int
-
-    train_return_pct: float
-    test_return_pct: float
-    test_buy_hold_return_pct: float
-    test_excess_return_pct: float
-
-    test_final_value: float
-    test_buy_hold_final_value: float
-    test_max_drawdown_pct: float
-    test_trades: int
-    test_win_rate_pct: float
-
-    optimization_results: pd.DataFrame
-    test_equity_curve: pd.DataFrame
-    test_trade_log: pd.DataFrame
 
 
 def _validate_parameter_grid(
@@ -320,89 +292,3 @@ def generic_walk_forward_test(
     )
 
 
-def walk_forward_test(
-    df: pd.DataFrame,
-    fast_values,
-    slow_values,
-    train_fraction: float = 0.70,
-    initial_capital: float = 500.0,
-    fee_rate: float = 0.001,
-    min_trades: int = 1,
-    optimization_target: str = "strategy_return",
-) -> WalkForwardResult:
-    """
-    Compatibility wrapper for the current MA-specific Streamlit tab.
-
-    Internally, this uses the generic walk-forward implementation.
-    """
-
-    strategy = get_strategy("Moving Average")
-
-    generic_result = generic_walk_forward_test(
-        df=df,
-        strategy=strategy,
-        parameter_grid={
-            "fast_window": list(fast_values),
-            "slow_window": list(slow_values),
-        },
-        train_fraction=train_fraction,
-        initial_capital=initial_capital,
-        fee_rate=fee_rate,
-        min_trades=min_trades,
-        optimization_target=optimization_target,
-    )
-
-    fast_ma = int(
-        generic_result.best_parameters["fast_window"]
-    )
-
-    slow_ma = int(
-        generic_result.best_parameters["slow_window"]
-    )
-
-    optimization_results = (
-        generic_result.optimization_results.rename(
-            columns={
-                "fast_window": "fast_ma",
-                "slow_window": "slow_ma",
-            }
-        )
-    )
-
-    return WalkForwardResult(
-        fast_ma=fast_ma,
-        slow_ma=slow_ma,
-        split_index=generic_result.split_index,
-        train_rows=generic_result.train_rows,
-        test_rows=generic_result.test_rows,
-        train_return_pct=(
-            generic_result.train_return_pct
-        ),
-        test_return_pct=(
-            generic_result.test_return_pct
-        ),
-        test_buy_hold_return_pct=(
-            generic_result.test_buy_hold_return_pct
-        ),
-        test_excess_return_pct=(
-            generic_result.test_excess_return_pct
-        ),
-        test_final_value=(
-            generic_result.test_final_value
-        ),
-        test_buy_hold_final_value=(
-            generic_result.test_buy_hold_final_value
-        ),
-        test_max_drawdown_pct=(
-            generic_result.test_max_drawdown_pct
-        ),
-        test_trades=generic_result.test_trades,
-        test_win_rate_pct=(
-            generic_result.test_win_rate_pct
-        ),
-        optimization_results=optimization_results,
-        test_equity_curve=(
-            generic_result.test_equity_curve
-        ),
-        test_trade_log=generic_result.test_trade_log,
-    )
