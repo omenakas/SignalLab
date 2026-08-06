@@ -12,6 +12,7 @@ from strategies.registry import StrategyDefinition, get_strategy
 class GenericWalkForwardResult:
     strategy_name: str
     best_parameters: dict[str, Any]
+    optimization_target: str
 
     split_index: int
     train_rows: int
@@ -162,6 +163,7 @@ def generic_walk_forward_test(
     initial_capital: float = 500.0,
     fee_rate: float = 0.001,
     min_trades: int = 1,
+    optimization_target: str = "strategy_return",
 ) -> GenericWalkForwardResult:
     """
     Optimize a registered strategy on the earlier training period,
@@ -238,6 +240,7 @@ def generic_walk_forward_test(
         initial_capital=initial_capital,
         fee_rate=fee_rate,
         min_trades=min_trades,
+        optimization_target=optimization_target,
     )
 
     if optimization_results.empty:
@@ -290,6 +293,7 @@ def generic_walk_forward_test(
     return GenericWalkForwardResult(
         strategy_name=strategy.name,
         best_parameters=best_parameters,
+        optimization_target=optimization_target,
         split_index=split_index,
         train_rows=len(train_df),
         test_rows=len(test_df),
@@ -324,6 +328,7 @@ def walk_forward_test(
     initial_capital: float = 500.0,
     fee_rate: float = 0.001,
     min_trades: int = 1,
+    optimization_target: str = "strategy_return",
 ) -> WalkForwardResult:
     """
     Compatibility wrapper for the current MA-specific Streamlit tab.
@@ -344,6 +349,7 @@ def walk_forward_test(
         initial_capital=initial_capital,
         fee_rate=fee_rate,
         min_trades=min_trades,
+        optimization_target=optimization_target,
     )
 
     fast_ma = int(

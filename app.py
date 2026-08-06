@@ -62,6 +62,10 @@ from analytics.trade_metrics import (
     calculate_trade_metrics,
 )
 
+from optimization_objectives import (
+    OPTIMIZATION_OBJECTIVES,
+)
+
 
 
 st.title("📊 SignalLab")
@@ -353,18 +357,6 @@ with strategy_lab_tab:
         the same generic simulator.
         """
     )
-
-    OPTIMIZATION_OBJECTIVES = {
-        "Highest Return": "strategy_return",
-        "Highest Sharpe Ratio": "sharpe_ratio",
-        "Highest Sortino Ratio": "sortino_ratio",
-        "Highest CAGR": "cagr",
-        "Highest Calmar Ratio": "calmar_ratio",
-        "Highest Profit Factor": "profit_factor",
-        "Highest Expectancy": "expectancy",
-        "Lowest Volatility": "volatility",
-        "Lowest Maximum Drawdown": "max_drawdown",
-    }
 
     selected_optimizer_name = st.selectbox(
         "Strategy to optimize",
@@ -727,6 +719,20 @@ with walk_forward_tab:
         """
     )
 
+    walk_forward_objective = st.selectbox(
+        "Optimization objective",
+        options=list(
+            OPTIMIZATION_OBJECTIVES
+        ),
+        key="walk_forward_objective",
+    )
+
+    walk_forward_target = (
+        OPTIMIZATION_OBJECTIVES[
+            walk_forward_objective
+        ]
+    )
+
     wf_settings1, wf_settings2, wf_settings3 = st.columns(3)
 
     with wf_settings1:
@@ -869,6 +875,7 @@ with walk_forward_tab:
                         initial_capital=wf_capital,
                         fee_rate=wf_fee_percent / 100,
                         min_trades=int(wf_min_trades),
+                        optimization_target=walk_forward_target,
                     )
 
                 st.success(
@@ -876,6 +883,11 @@ with walk_forward_tab:
                 )
 
                 st.markdown("### Selected training-period strategy")
+
+                st.caption(
+                    f"Parameters selected by: "
+                    f"{walk_forward_objective}"
+                )
 
                 selection1, selection2, selection3 = st.columns(3)
 
