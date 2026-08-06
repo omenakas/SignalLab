@@ -33,7 +33,132 @@ class GenericWalkForwardResult:
     test_equity_curve: pd.DataFrame
     test_trade_log: pd.DataFrame
 
+    window_number: int | None = None
 
+    train_start_date: pd.Timestamp | None = None
+    train_end_date: pd.Timestamp | None = None
+    test_start_date: pd.Timestamp | None = None
+    test_end_date: pd.Timestamp | None = None
+
+@dataclass
+class RollingWalkForwardResult:
+    """
+    Result of a rolling walk-forward analysis.
+    """
+
+    windows: list[GenericWalkForwardResult]
+
+    @property
+    def number_of_windows(self) -> int:
+        return len(self.windows)
+
+    @property
+    def average_test_return(self) -> float:
+        return float(
+            sum(
+                window.test_return_pct
+                for window in self.windows
+            )
+            / len(self.windows)
+        )
+
+    @property
+    def average_excess_return(self) -> float:
+        return float(
+            sum(
+                window.test_excess_return_pct
+                for window in self.windows
+            )
+            / len(self.windows)
+        )
+
+    @property
+    def average_drawdown(self) -> float:
+        return float(
+            sum(
+                window.test_max_drawdown_pct
+                for window in self.windows
+            )
+            / len(self.windows)
+        )
+
+    @property
+    def average_win_rate(self) -> float:
+        return float(
+            sum(
+                window.test_win_rate_pct
+                for window in self.windows
+            )
+            / len(self.windows)
+        )
+    
+    @property
+    def best_window(
+        self,
+    ) -> GenericWalkForwardResult:
+        return max(
+            self.windows,
+            key=lambda window: (
+                window.test_return_pct
+            ),
+        )
+
+    @property
+    def worst_window(
+        self,
+    ) -> GenericWalkForwardResult:
+        return min(
+            self.windows,
+            key=lambda window: (
+                window.test_return_pct
+            ),
+        )
+    
+    @property
+    def summary_table(
+        self,
+    ) -> pd.DataFrame:
+        rows = []
+
+        for window in self.windows:
+            rows.append(
+                {
+                    "Window": window.window_number,
+                    "Train start": (
+                        window.train_start_date
+                    ),
+                    "Train end": (
+                        window.train_end_date
+                    ),
+                    "Test start": (
+                        window.test_start_date
+                    ),
+                    "Test end": (
+                        window.test_end_date
+                    ),
+                    "Best parameters": (
+                        window.best_parameters
+                    ),
+                    "Training return (%)": (
+                        window.train_return_pct
+                    ),
+                    "Testing return (%)": (
+                        window.test_return_pct
+                    ),
+                    "Excess return (pp)": (
+                        window.test_excess_return_pct
+                    ),
+                    "Max drawdown (%)": (
+                        window.test_max_drawdown_pct
+                    ),
+                    "Trades": window.test_trades,
+                    "Win rate (%)": (
+                        window.test_win_rate_pct
+                    ),
+                }
+            )
+
+        return pd.DataFrame(rows)
 
 def _validate_parameter_grid(
     strategy: StrategyDefinition,
@@ -291,4 +416,127 @@ def generic_walk_forward_test(
         test_trade_log=test_simulation.trades,
     )
 
+def rolling_walk_forward_test(
+    df: pd.DataFrame,
+    strategy: StrategyDefinition,
+    parameter_grid: dict[str, list[Any]],
+    training_rows: int,
+    testing_rows: int,
+    step_rows: int,
+    initial_capital: float = 500.0,
+    fee_rate: float = 0.001,
+    min_trades: int = 1,
+    optimization_target: str = "strategy_return",
+) -> RollingWalkForwardResult:
+    """
+    Execute repeated walk-forward analyses using rolling
+    training and testing windows.
+    """
 
+    if df is None or df.empty:
+        raise ValueError(
+            "The dataframe is empty."
+        )
+
+    if training_rows <= 0:
+        raise ValueError(
+            "Training rows must be positive."
+        )
+
+    if testing_rows <= 0:
+        raise ValueError(
+            "Testing rows must be positive."
+        )
+
+    if step_rows <= 0:
+        raise ValueError(
+            "Step rows must be positive."
+        )
+
+    if len(df) < training_rows + testing_rows:
+        raise ValueError(
+            "Not enough history for one rolling window."
+        )
+
+    windows: list[
+        GenericWalkForwardResult
+    ] = []
+
+    start = 0
+
+    while True:
+        train_start = start
+        train_end = train_start + training_rows
+
+        test_start = train_end
+        test_end = test_start + testing_rows
+
+        if test_end > len(df):
+            break
+
+        window_df = df.iloc[
+            train_start:test_end
+        ].copy()
+
+        try:
+            window_result = generic_walk_forward_test(
+                df=window_df,
+                strategy=strategy,
+                parameter_grid=parameter_grid,
+                train_fraction=(
+                    training_rows
+                    / (
+                        training_rows
+                        + testing_rows
+                    )
+                ),
+                initial_capital=initial_capital,
+                fee_rate=fee_rate,
+                min_trades=min_trades,
+                optimization_target=optimization_target,
+            )
+
+        except ValueError:
+            start += step_rows
+            continue
+
+
+        window_result.window_number = (
+            len(windows) + 1
+        )
+
+        window_result.train_start_date = (
+            window_df.iloc[0]["date"]
+        )
+
+        window_result.train_end_date = (
+            window_df.iloc[
+                training_rows - 1
+            ]["date"]
+        )
+
+        window_result.test_start_date = (
+            window_df.iloc[
+                training_rows
+            ]["date"]
+        )
+
+        window_result.test_end_date = (
+            window_df.iloc[-1]["date"]
+        )
+
+        windows.append(
+            window_result
+        )
+        
+        start += step_rows
+
+    if not windows:
+        raise ValueError(
+            "No valid rolling walk-forward windows "
+            "were produced."
+        )
+
+    return RollingWalkForwardResult(
+        windows=windows,
+    )

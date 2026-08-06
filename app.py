@@ -10,7 +10,10 @@ from strategy import analyze_market
 from engine.simulator import run_position_backtest
 from strategies.registry import STRATEGIES, get_strategy
 from optimizer import optimize_strategy
-from walk_forward import generic_walk_forward_test
+from walk_forward import (
+    generic_walk_forward_test,
+    rolling_walk_forward_test,
+)
 
 from ui.parameter_builder import build_parameter_inputs
 from ui.charts import plot_price_with_trades
@@ -732,6 +735,16 @@ with walk_forward_tab:
         selected_walk_forward_strategy.description
     )
 
+    walk_forward_mode = st.radio(
+        "Analysis mode",
+        options=[
+            "Single holdout",
+            "Rolling walk-forward",
+        ],
+        horizontal=True,
+        key="walk_forward_mode",
+    )
+
     walk_forward_objective = st.selectbox(
         "Optimization objective",
         options=list(
@@ -793,6 +806,68 @@ with walk_forward_tab:
         key_prefix="walk_forward",
     )
 
+    if walk_forward_mode == "Rolling walk-forward":
+        st.markdown("#### Rolling windows")
+
+        rolling1, rolling2, rolling3 = st.columns(3)
+
+        with rolling1:
+            wf_training_rows = st.number_input(
+                "Training rows",
+                min_value=30,
+                max_value=max(
+                    30,
+                    len(history) - 20,
+                ),
+                value=min(
+                    365,
+                    max(
+                        30,
+                        len(history) - 20,
+                    ),
+                ),
+                step=10,
+                key="wf_training_rows",
+            )
+
+        with rolling2:
+            wf_testing_rows = st.number_input(
+                "Testing rows",
+                min_value=20,
+                max_value=max(
+                    20,
+                    len(history) - 30,
+                ),
+                value=min(
+                    90,
+                    max(
+                        20,
+                        len(history) - 30,
+                    ),
+                ),
+                step=10,
+                key="wf_testing_rows",
+            )
+
+        with rolling3:
+            wf_step_rows = st.number_input(
+                "Step rows",
+                min_value=1,
+                max_value=max(
+                    1,
+                    len(history),
+                ),
+                value=min(
+                    90,
+                    max(
+                        1,
+                        len(history),
+                    ),
+                ),
+                step=10,
+                key="wf_step_rows",
+            )
+
     run_walk_forward = st.button(
         "Run Walk-Forward Test",
         type="primary",
@@ -803,142 +878,259 @@ with walk_forward_tab:
     if run_walk_forward:
         try:
             with st.spinner(
-                "Optimizing the training period and testing "
-                "the winner on unseen data..."
+                "Running walk-forward analysis..."
             ):
-                wf_result = generic_walk_forward_test(
-                    df=history,
-                    strategy=selected_walk_forward_strategy,
-                    parameter_grid=parameter_grid,
-                    train_fraction=wf_train_percent / 100,
-                    initial_capital=wf_capital,
-                    fee_rate=wf_fee_percent / 100,
-                    min_trades=int(wf_min_trades),
-                    optimization_target=walk_forward_target,
+                if (
+                    walk_forward_mode
+                    == "Rolling walk-forward"
+                ):
+                    rolling_result = (
+                        rolling_walk_forward_test(
+                            df=history,
+                            strategy=(
+                                selected_walk_forward_strategy
+                            ),
+                            parameter_grid=parameter_grid,
+                            training_rows=int(
+                                wf_training_rows
+                            ),
+                            testing_rows=int(
+                                wf_testing_rows
+                            ),
+                            step_rows=int(
+                                wf_step_rows
+                            ),
+                            initial_capital=wf_capital,
+                            fee_rate=(
+                                wf_fee_percent / 100
+                            ),
+                            min_trades=int(
+                                wf_min_trades
+                            ),
+                            optimization_target=(
+                                walk_forward_target
+                            ),
+                        )
+                    )
+
+                else:
+                    wf_result = (
+                        generic_walk_forward_test(
+                            df=history,
+                            strategy=(
+                                selected_walk_forward_strategy
+                            ),
+                            parameter_grid=parameter_grid,
+                            train_fraction=(
+                                wf_train_percent / 100
+                            ),
+                            initial_capital=wf_capital,
+                            fee_rate=(
+                                wf_fee_percent / 100
+                            ),
+                            min_trades=int(
+                                wf_min_trades
+                            ),
+                            optimization_target=(
+                                walk_forward_target
+                            ),
+                        )
+                    )
+
+            if (
+                walk_forward_mode
+                == "Rolling walk-forward"
+            ):
+                st.success(
+                    "Rolling walk-forward analysis "
+                    "completed successfully."
                 )
 
-            st.success(
-                "Walk-forward test completed successfully."
-            )
+                st.markdown(
+                    "### Rolling Walk-Forward Summary"
+                )
 
-            st.markdown("### Selected training-period strategy")
+                summary1, summary2, summary3, summary4 = (
+                    st.columns(4)
+                )
 
-            st.caption(
-                f"Parameters selected by: "
-                f"{walk_forward_objective}"
-            )
+                summary1.metric(
+                    "Valid windows",
+                    rolling_result.number_of_windows,
+                )
 
-            formatted_best_parameters = " · ".join(
-                f"{parameter.label}: "
-                f"{wf_result.best_parameters[parameter.name]}"
-                for parameter in selected_walk_forward_strategy.parameters
-                if parameter.name in wf_result.best_parameters
-            )
+                summary2.metric(
+                    "Average test return",
+                    f"{rolling_result.average_test_return:+.2f}%",
+                )
 
-            st.markdown(
-                f"**Best parameters:** "
-                f"{formatted_best_parameters}"
-            )
+                summary3.metric(
+                    "Average drawdown",
+                    f"{rolling_result.average_drawdown:.2f}%",
+                )
 
-            selection1, selection2 = st.columns(2)
+                summary4.metric(
+                    "Average win rate",
+                    f"{rolling_result.average_win_rate:.1f}%",
+                )
 
-            selection1.metric(
-                "Training return",
-                f"{wf_result.train_return_pct:.2f}%",
-            )
+                st.caption(
+                    f"Parameters selected by: "
+                    f"{walk_forward_objective}"
+                )
 
-            selection2.metric(
-                "Strategy",
-                wf_result.strategy_name,
-            )
+                st.markdown(
+                    "### Window Summary"
+                )
 
-            st.markdown("### Unseen testing-period results")
-
-            result1, result2, result3, result4 = st.columns(4)
-
-            result1.metric(
-                "Strategy return",
-                f"{wf_result.test_return_pct:.2f}%",
-            )
-
-            result2.metric(
-                "Buy & Hold",
-                f"{wf_result.test_buy_hold_return_pct:.2f}%",
-            )
-
-            result3.metric(
-                "Excess return",
-                f"{wf_result.test_excess_return_pct:.2f}%",
-            )
-
-            result4.metric(
-                "Maximum drawdown",
-                f"{wf_result.test_max_drawdown_pct:.2f}%",
-            )
-
-            detail1, detail2, detail3, detail4 = st.columns(4)
-
-            detail1.metric(
-                "Final strategy value",
-                f"€{wf_result.test_final_value:,.2f}",
-            )
-
-            detail2.metric(
-                "Buy & Hold value",
-                f"€{wf_result.test_buy_hold_final_value:,.2f}",
-            )
-
-            detail3.metric(
-                "Completed trades",
-                wf_result.test_trades,
-            )
-
-            detail4.metric(
-                "Win rate",
-                f"{wf_result.test_win_rate_pct:.1f}%",
-            )
-
-            chart_data = wf_result.test_equity_curve[
-                [
-                    "strategy_value",
-                    "buy_hold_value",
-                ]
-            ]
-
-            st.line_chart(chart_data)
-
-            st.caption(
-                f"Training rows: {wf_result.train_rows} · "
-                f"Testing rows: {wf_result.test_rows}"
-            )
-
-            with st.expander(
-                "Show training-period optimization results"
-            ):
                 st.dataframe(
-                    wf_result.optimization_results,
+                    rolling_result.summary_table,
+                    hide_index=True,
                     width="stretch",
                 )
 
-            with st.expander("Show unseen-period trade log"):
-                if wf_result.test_trade_log.empty:
-                    st.info(
-                        "The selected strategy made no completed "
-                        "trades during the testing period."
-                    )
-                else:
+                st.markdown(
+                    "### Testing Return by Window"
+                )
+
+                return_chart_data = (
+                    rolling_result.summary_table[
+                        [
+                            "Window",
+                            "Testing return (%)",
+                        ]
+                    ]
+                    .set_index("Window")
+                )
+
+                st.bar_chart(
+                    return_chart_data,
+                    width="stretch",
+                )
+
+            else:
+                st.success(
+                    "Walk-forward test completed successfully."
+                )
+
+                st.markdown("### Selected training-period strategy")
+
+                st.caption(
+                    f"Parameters selected by: "
+                    f"{walk_forward_objective}"
+                )
+
+                formatted_best_parameters = " · ".join(
+                    f"{parameter.label}: "
+                    f"{wf_result.best_parameters[parameter.name]}"
+                    for parameter in selected_walk_forward_strategy.parameters
+                    if parameter.name in wf_result.best_parameters
+                )
+
+                st.markdown(
+                    f"**Best parameters:** "
+                    f"{formatted_best_parameters}"
+                )
+
+                selection1, selection2 = st.columns(2)
+
+                selection1.metric(
+                    "Training return",
+                    f"{wf_result.train_return_pct:.2f}%",
+                )
+
+                selection2.metric(
+                    "Strategy",
+                    wf_result.strategy_name,
+                )
+
+                st.markdown("### Unseen testing-period results")
+
+                result1, result2, result3, result4 = st.columns(4)
+
+                result1.metric(
+                    "Strategy return",
+                    f"{wf_result.test_return_pct:.2f}%",
+                )
+
+                result2.metric(
+                    "Buy & Hold",
+                    f"{wf_result.test_buy_hold_return_pct:.2f}%",
+                )
+
+                result3.metric(
+                    "Excess return",
+                    f"{wf_result.test_excess_return_pct:.2f}%",
+                )
+
+                result4.metric(
+                    "Maximum drawdown",
+                    f"{wf_result.test_max_drawdown_pct:.2f}%",
+                )
+
+                detail1, detail2, detail3, detail4 = st.columns(4)
+
+                detail1.metric(
+                    "Final strategy value",
+                    f"€{wf_result.test_final_value:,.2f}",
+                )
+
+                detail2.metric(
+                    "Buy & Hold value",
+                    f"€{wf_result.test_buy_hold_final_value:,.2f}",
+                )
+
+                detail3.metric(
+                    "Completed trades",
+                    wf_result.test_trades,
+                )
+
+                detail4.metric(
+                    "Win rate",
+                    f"{wf_result.test_win_rate_pct:.1f}%",
+                )
+
+                chart_data = wf_result.test_equity_curve[
+                    [
+                        "strategy_value",
+                        "buy_hold_value",
+                    ]
+                ]
+
+                st.line_chart(chart_data)
+
+                st.caption(
+                    f"Training rows: {wf_result.train_rows} · "
+                    f"Testing rows: {wf_result.test_rows}"
+                )
+
+                with st.expander(
+                    "Show training-period optimization results"
+                ):
                     st.dataframe(
-                        wf_result.test_trade_log,
+                        wf_result.optimization_results,
                         width="stretch",
                     )
 
-            st.warning(
-                "A single holdout test is more honest than "
-                "optimizing on all available data, but it is still "
-                "only one historical experiment. It does not "
-                "demonstrate that the strategy will work in the "
-                "future."
-            )
+                with st.expander("Show unseen-period trade log"):
+                    if wf_result.test_trade_log.empty:
+                        st.info(
+                            "The selected strategy made no completed "
+                            "trades during the testing period."
+                        )
+                    else:
+                        st.dataframe(
+                            wf_result.test_trade_log,
+                            width="stretch",
+                        )
+
+                st.warning(
+                    "A single holdout test is more honest than "
+                    "optimizing on all available data, but it is still "
+                    "only one historical experiment. It does not "
+                    "demonstrate that the strategy will work in the "
+                    "future."
+                )
 
         except ValueError as error:
             st.warning(
