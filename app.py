@@ -41,6 +41,7 @@ from ui.formatting import (
     BACKTEST_FORMATS,
     TRADE_HISTORY_FORMATS,
     format_dataframe,
+    format_currency,
 )
 
 from ui.parameter_summary import (
@@ -353,6 +354,18 @@ with strategy_lab_tab:
         """
     )
 
+    OPTIMIZATION_OBJECTIVES = {
+        "Highest Return": "strategy_return",
+        "Highest Sharpe Ratio": "sharpe_ratio",
+        "Highest Sortino Ratio": "sortino_ratio",
+        "Highest CAGR": "cagr",
+        "Highest Calmar Ratio": "calmar_ratio",
+        "Highest Profit Factor": "profit_factor",
+        "Highest Expectancy": "expectancy",
+        "Lowest Volatility": "volatility",
+        "Lowest Maximum Drawdown": "max_drawdown",
+    }
+
     selected_optimizer_name = st.selectbox(
         "Strategy to optimize",
         options=list(STRATEGIES.keys()),
@@ -399,6 +412,14 @@ with strategy_lab_tab:
             key="optimizer_minimum_trades",
         )
 
+    optimization_objective = st.selectbox(
+        "Optimization objective",
+        options=list(
+            OPTIMIZATION_OBJECTIVES
+        ),
+        key="optimizer_objective",
+    )
+
     st.markdown("#### Parameter ranges")
 
     parameter_grid = build_optimization_grid_inputs(
@@ -440,6 +461,11 @@ with strategy_lab_tab:
                 initial_capital=optimizer_capital,
                 fee_rate=optimizer_fee / 100,
                 min_trades=int(minimum_trades),
+                optimization_target=(
+                    OPTIMIZATION_OBJECTIVES[
+                        optimization_objective
+                    ]
+                ),
             )
 
         if optimizer_results.empty:
@@ -468,26 +494,95 @@ with strategy_lab_tab:
                 for label, value in best_parameters.items()
             )
 
+            st.markdown(
+                f"**Best parameters:** {formatted_parameters}"
+            )
+
+            st.caption(
+                f"Ranked by: {optimization_objective}"
+            )
+
+            objective_column = (
+                OPTIMIZATION_OBJECTIVES[
+                    optimization_objective
+                ]
+            )
+
+            objective_formats = {
+                "strategy_return": (
+                    "Objective value",
+                    lambda value: f"{value:+.2f}%",
+                ),
+                "sharpe_ratio": (
+                    "Sharpe Ratio",
+                    lambda value: f"{value:.2f}",
+                ),
+                "sortino_ratio": (
+                    "Sortino Ratio",
+                    lambda value: f"{value:.2f}",
+                ),
+                "cagr": (
+                    "CAGR",
+                    lambda value: f"{value:+.2f}%",
+                ),
+                "calmar_ratio": (
+                    "Calmar Ratio",
+                    lambda value: f"{value:.2f}",
+                ),
+                "profit_factor": (
+                    "Profit Factor",
+                    lambda value: (
+                        "∞"
+                        if value == float("inf")
+                        else f"{value:.2f}"
+                    ),
+                ),
+                "expectancy": (
+                    "Expectancy",
+                    lambda value: format_currency(
+                        float(value)
+                    ),
+                ),
+                "volatility": (
+                    "Volatility",
+                    lambda value: f"{value:.2f}%",
+                ),
+                "max_drawdown": (
+                    "Maximum Drawdown",
+                    lambda value: f"{value:.2f}%",
+                ),
+            }
+
+            objective_label, objective_formatter = (
+                objective_formats[objective_column]
+            )
+
             best1, best2, best3, best4 = st.columns(4)
 
             best1.metric(
-                "Best parameters",
-                formatted_parameters,
+                objective_label,
+                objective_formatter(
+                    best[objective_column]
+                ),
             )
 
             best2.metric(
-                "Strategy return",
-                f"{best['strategy_return']:+.1f}%",
+                "Strategy Return",
+                f"{best['strategy_return']:+.2f}%",
             )
 
             best3.metric(
-                "Excess vs hold",
-                f"{best['excess_return']:+.1f} pp",
+                "Profit Factor",
+                (
+                    "∞"
+                    if best["profit_factor"] == float("inf")
+                    else f"{best['profit_factor']:.2f}"
+                ),
             )
 
             best4.metric(
-                "Maximum drawdown",
-                f"{best['max_drawdown']:.1f}%",
+                "Maximum Drawdown",
+                f"{best['max_drawdown']:.2f}%",
             )
 
             st.markdown("### Ranked strategies")
@@ -547,10 +642,7 @@ with strategy_lab_tab:
             )
 
             st.dataframe(
-                format_dataframe(
-                    result.trades,
-                    TRADE_HISTORY_FORMATS,
-                ),
+                display_results,
                 hide_index=True,
                 width="stretch",
             )

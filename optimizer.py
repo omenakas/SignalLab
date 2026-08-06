@@ -6,6 +6,118 @@ import pandas as pd
 from engine.simulator import run_position_backtest
 from strategies.registry import StrategyDefinition, get_strategy
 
+from analytics.performance import (
+    calculate_performance_metrics,
+)
+
+from analytics.trade_metrics import (
+    calculate_trade_metrics,
+)
+
+OPTIMIZATION_OBJECTIVES = {
+    "strategy_return": False,
+    "sharpe_ratio": False,
+    "sortino_ratio": False,
+    "cagr": False,
+    "calmar_ratio": False,
+    "profit_factor": False,
+    "expectancy": False,
+    "max_drawdown": True,
+    "volatility": True,
+}
+
+def _sort_optimizer_results(
+    results: pd.DataFrame,
+    optimization_target: str = "strategy_return",
+) -> pd.DataFrame:
+    """
+    Rank optimizer results using the selected objective.
+
+    Higher values are preferred for return and quality
+    metrics. Lower values are preferred for risk metrics
+    such as drawdown and volatility.
+
+    Maximum drawdown is used as a secondary tie-breaker
+    unless it is already the primary objective.
+    """
+
+    if optimization_target not in OPTIMIZATION_OBJECTIVES:
+        raise ValueError(
+            "Unsupported optimization target: "
+            f"{optimization_target}"
+        )
+
+    if optimization_target not in results.columns:
+        raise ValueError(
+            "Optimization results are missing the target column: "
+            f"{optimization_target}"
+        )
+
+    primary_ascending = (
+        OPTIMIZATION_OBJECTIVES[
+            optimization_target
+        ]
+    )
+
+    if optimization_target == "max_drawdown":
+        sort_columns = [
+            "max_drawdown",
+            "strategy_return",
+        ]
+
+        ascending = [
+            True,
+            False,
+        ]
+
+    else:
+        sort_columns = [
+            optimization_target,
+            "max_drawdown",
+        ]
+
+        ascending = [
+            primary_ascending,
+            True,
+        ]
+
+    return (
+        results
+        .sort_values(
+            by=sort_columns,
+            ascending=ascending,
+        )
+        .reset_index(drop=True)
+    )
+
+def _build_optimizer_result(
+    parameters: dict[str, Any],
+    simulation: Any,
+    performance_metrics: Any,
+    trade_metrics: Any,
+) -> dict[str, Any]:
+    """
+    Build one optimizer result row from parameters,
+    backtest results, and calculated analytics.
+    """
+
+    return {
+        **parameters,
+        "final_value": simulation.final_value,
+        "strategy_return": simulation.strategy_return,
+        "buy_hold_return": simulation.buy_hold_return,
+        "excess_return": simulation.excess_return,
+        "max_drawdown": simulation.max_drawdown,
+        "completed_trades": simulation.completed_trades,
+        "win_rate": simulation.win_rate,
+        "sharpe_ratio": performance_metrics.sharpe_ratio,
+        "sortino_ratio": performance_metrics.sortino_ratio,
+        "cagr": performance_metrics.cagr,
+        "calmar_ratio": performance_metrics.calmar_ratio,
+        "volatility": performance_metrics.volatility,
+        "profit_factor": trade_metrics.profit_factor,
+        "expectancy": trade_metrics.expectancy,
+    }
 
 def optimize_strategy(
     df: pd.DataFrame,
@@ -14,6 +126,7 @@ def optimize_strategy(
     initial_capital: float = 500.0,
     fee_rate: float = 0.001,
     min_trades: int = 0,
+    optimization_target: str = "strategy_return",
 ) -> pd.DataFrame:
     """
     Evaluate every combination in a strategy parameter grid.
@@ -77,6 +190,12 @@ def optimize_strategy(
         for name in parameter_names
     ]
 
+    if optimization_target not in OPTIMIZATION_OBJECTIVES:
+        raise ValueError(
+            "Unsupported optimization target: "
+            f"{optimization_target}"
+        )
+
     results: list[dict[str, Any]] = []
 
     for combination in product(*parameter_value_lists):
@@ -100,6 +219,7 @@ def optimize_strategy(
                 fee_rate=fee_rate,
             )
 
+
         except ValueError:
             # Invalid combinations such as fast MA >= slow MA
             # are skipped rather than stopping the entire search.
@@ -108,17 +228,21 @@ def optimize_strategy(
         if simulation.completed_trades < min_trades:
             continue
 
+        performance_metrics = calculate_performance_metrics(
+            history=simulation.history,
+        )
+
+        trade_metrics = calculate_trade_metrics(
+            trades=simulation.trades,
+        )
+
         results.append(
-            {
-                **parameters,
-                "final_value": simulation.final_value,
-                "strategy_return": simulation.strategy_return,
-                "buy_hold_return": simulation.buy_hold_return,
-                "excess_return": simulation.excess_return,
-                "max_drawdown": simulation.max_drawdown,
-                "completed_trades": simulation.completed_trades,
-                "win_rate": simulation.win_rate,
-            }
+            _build_optimizer_result(
+                parameters=parameters,
+                simulation=simulation,
+                performance_metrics=performance_metrics,
+                trade_metrics=trade_metrics,
+            )
         )
 
     if not results:
@@ -126,16 +250,10 @@ def optimize_strategy(
 
     result_df = pd.DataFrame(results)
 
-    return result_df.sort_values(
-        by=[
-            "strategy_return",
-            "max_drawdown",
-        ],
-        ascending=[
-            False,
-            False,
-        ],
-    ).reset_index(drop=True)
+    return _sort_optimizer_results(
+        results=result_df,
+        optimization_target=optimization_target,
+    )
 
 
 def optimize_ma_strategy(
