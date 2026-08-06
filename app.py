@@ -10,9 +10,10 @@ from optimizer import optimize_ma_strategy
 from strategy import analyze_market
 from engine.simulator import run_position_backtest
 from strategies.registry import STRATEGIES, get_strategy
+from optimizer import optimize_strategy
+
 from ui.parameter_builder import build_parameter_inputs
 from ui.charts import plot_price_with_trades
-from optimizer import optimize_strategy
 from ui.parameter_builder import (
     build_optimization_grid_inputs,
 )
@@ -20,7 +21,6 @@ from ui.charts import (
     plot_indicator_panel,
     plot_price_with_trades,
 )
-from analytics.performance import calculate_performance_metrics
 from ui.performance_dashboard import (
     render_performance_dashboard,
 )
@@ -29,13 +29,6 @@ from ui.performance_highlights import (
 )
 from ui.strategy_report_card import (
     render_strategy_report_card,
-)
-from analytics.drawdown import (
-    calculate_drawdown_series,
-)
-from analytics.rolling import calculate_rolling_sharpe
-from analytics.monthly_returns import (
-    calculate_monthly_returns,
 )
 from ui.charts import (
     plot_drawdown,
@@ -48,6 +41,21 @@ from ui.formatting import (
     BACKTEST_FORMATS,
     TRADE_HISTORY_FORMATS,
     format_dataframe,
+)
+
+from ui.parameter_summary import (
+    render_parameter_summary,
+)
+from ui.parameter_validation import (
+    validate_strategy_parameters,
+)
+from analytics.performance import calculate_performance_metrics
+from analytics.drawdown import (
+    calculate_drawdown_series,
+)
+from analytics.rolling import calculate_rolling_sharpe
+from analytics.monthly_returns import (
+    calculate_monthly_returns,
 )
 from analytics.trade_metrics import (
     calculate_trade_metrics,
@@ -959,11 +967,50 @@ with comparison_tab:
                     ),
                 )
             )
+    
+    render_parameter_summary(
+        comparison_parameters
+    )
+
+    st.divider()
+
+    validation_errors: list[str] = []
+    research_tips: list[str] = []
+
+    for (
+        strategy_name,
+        parameters,
+    ) in comparison_parameters.items():
+
+        errors, tips = (
+            validate_strategy_parameters(
+                strategy_name,
+                parameters,
+            )
+        )
+
+        validation_errors.extend(
+            errors
+        )
+
+        research_tips.extend(
+            tips
+        )
+
+    for error in validation_errors:
+        st.error(error)
+
+    if research_tips:
+        st.markdown("### 💡 Research Tips")
+
+        for tip in research_tips:
+            st.info(tip)
 
     if st.button(
         "Compare strategies",
         type="primary",
         key="compare_selected_strategies",
+        disabled=bool(validation_errors),
     ):
         if not selected_strategy_names:
             st.warning(
