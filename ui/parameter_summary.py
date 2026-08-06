@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ui.parameter_guidance import (
+    get_research_guidance,
+)
+
 from strategies.registry import (
     get_strategy,
 )
@@ -64,3 +68,13 @@ def render_parameter_summary(
                     st.markdown(
                         f"`{value}`"
                     )
+
+            guidance_items = get_research_guidance(
+                strategy_name,
+                parameter_values,
+            )
+
+            for guidance in guidance_items:
+                st.success(
+                    f"📚 {guidance}"
+                )
