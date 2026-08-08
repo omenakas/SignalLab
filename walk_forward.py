@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
+import statistics
 
 from engine.simulator import run_position_backtest
 from optimizer import optimize_strategy
@@ -155,6 +156,107 @@ class RollingWalkForwardResult:
                     "Win rate (%)": (
                         window.test_win_rate_pct
                     ),
+                }
+            )
+
+        return pd.DataFrame(rows)
+
+    @property
+    def parameter_history(
+        self,
+    ) -> dict[str, list[int | float]]:
+        """
+        Return the selected parameter values across
+        all valid rolling walk-forward windows.
+        """
+
+        history: dict[
+            str,
+            list[int | float],
+        ] = {}
+
+        for window in self.windows:
+            for (
+                parameter_name,
+                value,
+            ) in window.best_parameters.items():
+
+                history.setdefault(
+                    parameter_name,
+                    []
+                ).append(value)
+
+        return history
+    
+    @property
+    def parameter_statistics(
+        self,
+    ) -> dict[str, dict[str, float]]:
+        """
+        Return descriptive statistics for each
+        optimized parameter.
+        """
+
+        statistics_summary: dict[
+            str,
+            dict[str, float],
+        ] = {}
+
+        for (
+            parameter_name,
+            values,
+        ) in self.parameter_history.items():
+
+            statistics_summary[
+                parameter_name
+            ] = {
+                "minimum": min(values),
+                "maximum": max(values),
+                "mean": statistics.mean(values),
+                "range": (
+                    max(values)
+                    - min(values)
+                ),
+                "standard_deviation": (
+                    statistics.pstdev(values)
+                ),
+            }
+
+        return statistics_summary
+    
+    @property
+    def parameter_summary_table(
+        self,
+    ) -> pd.DataFrame:
+        """
+        Return parameter stability statistics as a table.
+        """
+
+        rows = []
+
+        for (
+            parameter_name,
+            statistics_summary,
+        ) in self.parameter_statistics.items():
+
+            rows.append(
+                {
+                    "Parameter": parameter_name,
+                    "Mean": statistics_summary[
+                        "mean"
+                    ],
+                    "Minimum": statistics_summary[
+                        "minimum"
+                    ],
+                    "Maximum": statistics_summary[
+                        "maximum"
+                    ],
+                    "Range": statistics_summary[
+                        "range"
+                    ],
+                    "Std Dev": statistics_summary[
+                        "standard_deviation"
+                    ],
                 }
             )
 

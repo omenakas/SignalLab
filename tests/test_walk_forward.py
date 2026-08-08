@@ -104,3 +104,134 @@ def test_rolling_result_identifies_best_and_worst_windows():
 
     assert result.best_window is best
     assert result.worst_window is worst
+
+def test_rolling_result_collects_parameter_history():
+    first = make_window(
+        test_return=5.0,
+        excess_return=2.0,
+        drawdown=8.0,
+        win_rate=50.0,
+    )
+
+    second = make_window(
+        test_return=7.0,
+        excess_return=3.0,
+        drawdown=6.0,
+        win_rate=60.0,
+    )
+
+    first.best_parameters = {
+        "fast_window": 18,
+        "slow_window": 80,
+    }
+
+    second.best_parameters = {
+        "fast_window": 20,
+        "slow_window": 85,
+    }
+
+    result = RollingWalkForwardResult(
+        windows=[
+            first,
+            second,
+        ]
+    )
+
+    assert result.parameter_history == {
+        "fast_window": [
+            18,
+            20,
+        ],
+        "slow_window": [
+            80,
+            85,
+        ],
+    }
+
+def test_parameter_statistics():
+    first = make_window(
+        test_return=5.0,
+        excess_return=2.0,
+        drawdown=8.0,
+        win_rate=50.0,
+    )
+
+    second = make_window(
+        test_return=7.0,
+        excess_return=3.0,
+        drawdown=6.0,
+        win_rate=60.0,
+    )
+
+    first.best_parameters = {
+        "fast_window": 18,
+    }
+
+    second.best_parameters = {
+        "fast_window": 20,
+    }
+
+    result = RollingWalkForwardResult(
+        windows=[
+            first,
+            second,
+        ]
+    )
+
+    stats = result.parameter_statistics[
+        "fast_window"
+    ]
+
+    assert stats["minimum"] == 18
+    assert stats["maximum"] == 20
+    assert stats["range"] == 2
+    assert stats["mean"] == pytest.approx(19.0)
+    assert stats[
+        "standard_deviation"
+    ] == pytest.approx(1.0)
+
+
+def test_parameter_summary_table():
+    first = make_window(
+        test_return=5.0,
+        excess_return=2.0,
+        drawdown=8.0,
+        win_rate=50.0,
+    )
+
+    second = make_window(
+        test_return=7.0,
+        excess_return=3.0,
+        drawdown=6.0,
+        win_rate=60.0,
+    )
+
+    first.best_parameters = {
+        "fast_window": 18,
+        "slow_window": 80,
+    }
+
+    second.best_parameters = {
+        "fast_window": 20,
+        "slow_window": 84,
+    }
+
+    result = RollingWalkForwardResult(
+        windows=[
+            first,
+            second,
+        ]
+    )
+
+    table = result.parameter_summary_table
+
+    assert list(table.columns) == [
+        "Parameter",
+        "Mean",
+        "Minimum",
+        "Maximum",
+        "Range",
+        "Std. Dev.",
+    ]
+
+    assert len(table) == 2

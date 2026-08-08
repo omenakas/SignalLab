@@ -946,9 +946,7 @@ with walk_forward_tab:
                     "completed successfully."
                 )
 
-                st.markdown(
-                    "### Rolling Walk-Forward Summary"
-                )
+                st.markdown("## 📈 Rolling Walk-Forward Analysis")
 
                 summary1, summary2, summary3, summary4 = (
                     st.columns(4)
@@ -979,9 +977,7 @@ with walk_forward_tab:
                     f"{walk_forward_objective}"
                 )
 
-                st.markdown(
-                    "### Window Summary"
-                )
+                st.markdown("### 📋 Window Summary")
 
                 st.dataframe(
                     rolling_result.summary_table,
@@ -989,9 +985,20 @@ with walk_forward_tab:
                     width="stretch",
                 )
 
-                st.markdown(
-                    "### Testing Return by Window"
+                st.markdown("### 🧪 Parameter Stability")
+
+                st.caption(
+                    "Lower parameter variation across rolling windows "
+                    "generally indicates a more robust optimization."
                 )
+
+                st.dataframe(
+                    rolling_result.parameter_summary_table.round(2),
+                    hide_index=True,
+                    width="stretch",
+                )
+
+                st.markdown("### 📊 Testing Return by Window")
 
                 return_chart_data = (
                     rolling_result.summary_table[
